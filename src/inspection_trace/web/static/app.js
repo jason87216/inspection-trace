@@ -1,6 +1,6 @@
 const query = new URLSearchParams(window.location.search);
 const requestedTab = query.get("tab");
-const tab = ["upload", "history", "records", "trace"].includes(requestedTab) ? requestedTab : "upload";
+const tab = ["upload", "history", "records", "trace", "spc"].includes(requestedTab) ? requestedTab : "upload";
 const labels = {
   ACCEPT: ["已入庫", ""],
   REJECT: ["拒絕入庫", "reject"],
@@ -421,11 +421,149 @@ function configurePeriodQTime() {
   });
 }
 
+const signalLabels = {
+  I_OUTSIDE_3SIGMA: "個別值超出 3σ",
+  I_EIGHT_SAME_SIDE: "連續 8 點在中心線同側",
+  MR_OUTSIDE_LIMIT: "移動全距超出管制上限",
+};
+const spcFormat = new Intl.NumberFormat("zh-TW", { maximumSignificantDigits: 6 });
+
+function drawControlChart(canvas, points, limits, baselineSize, field) {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (!width || !height) return;
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+
+  const values = points.map((point) => point[field]);
+  const numeric = values.filter((value) => value !== null);
+  if (!numeric.length) return;
+  const bounds = limits ? [limits.lower, limits.upper] : [];
+  const lo = Math.min(...numeric, ...bounds);
+  const hi = Math.max(...numeric, ...bounds);
+  const left = 68, right = width - 16, top = 16, bottom = height - 30;
+  const x = (index) => left + (right - left) * index / Math.max(1, points.length - 1);
+  const y = (value) => {
+    const ratio = hi === lo ? 0.5 : (value / 2 - lo / 2) / (hi / 2 - lo / 2);
+    return bottom - (bottom - top) * ratio;
+  };
+  ctx.fillStyle = "#e7effa";
+  ctx.fillRect(left, top, x(Math.min(points.length - 1, baselineSize - 0.5)) - left, bottom - top);
+  if (limits) {
+    for (const level of [limits.lower, limits.center, limits.upper]) {
+      ctx.beginPath();
+      ctx.strokeStyle = level === limits.center ? "#627186" : "#9a4a24";
+      ctx.setLineDash(level === limits.center ? [] : [5, 4]);
+      ctx.moveTo(left, y(level));
+      ctx.lineTo(right, y(level));
+      ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "#1c5fb8";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  values.forEach((value, index) => {
+    if (value === null) return;
+    ctx.lineTo(x(index), y(value));
+  });
+  ctx.stroke();
+  values.forEach((value, index) => {
+    if (value === null) return;
+    const marked = points[index].signals.some((signal) =>
+      field === "value" ? signal.startsWith("I_") : signal === "MR_OUTSIDE_LIMIT"
+    );
+    if (!marked && numeric.length > 1) return;
+    ctx.beginPath();
+    ctx.fillStyle = marked ? "#ad3e14" : "#1c5fb8";
+    ctx.arc(x(index), y(value), marked ? 4 : 3, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+  ctx.font = "11px system-ui";
+  ctx.fillStyle = "#556170";
+  ctx.textAlign = "right";
+  for (const level of new Set([lo, hi])) {
+    const text = Math.abs(level) >= 1e5 ? level.toExponential(2) : spcFormat.format(level);
+    ctx.fillText(text, left - 8, y(level) + 4);
+  }
+  ctx.textAlign = "left";
+  ctx.fillText("#1", left, height - 10);
+  ctx.textAlign = "right";
+  if (points.length > 1) ctx.fillText(`#${points.length}`, right, height - 10);
+}
+
+function configureSpc() {
+  const form = document.getElementById("spc-form");
+  const status = document.getElementById("spc-status");
+  const results = document.getElementById("spc-results");
+  const charts = [
+    ["individual", "value", "individual_limits"],
+    ["range", "moving_range", "range_limits"],
+  ];
+  let data;
+  let requestId = 0;
+  const draw = () => {
+    if (!data || results.hidden) return;
+    for (const [key, field, limitKey] of charts) {
+      drawControlChart(document.getElementById(`${key}-chart`), data.points, data[limitKey], data.baseline_points, field);
+    }
+  };
+  new ResizeObserver(draw).observe(results);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const current = ++requestId;
+    const fields = new FormData(form);
+    const params = new URLSearchParams({
+      machine: fields.get("machine").trim(),
+      baseline_points: fields.get("baseline_points"),
+    });
+    for (const key of ["from", "to"]) {
+      if (fields.get(key)) params.set(key, localDateTime(fields.get(key)));
+    }
+    results.hidden = true;
+    indicate(status, "正在計算管制圖…");
+    try {
+      const chart = await getJson(`/spc/${encodeURIComponent(fields.get("item_code").trim())}?${params}`);
+      if (current !== requestId) return;
+      data = chart;
+      if (!chart.points.length) {
+        indicate(status, "沒有符合條件的已入庫量測。");
+        return;
+      }
+      const rows = chart.points.flatMap((point, index) => point.signals.length ? [tableRow([
+        index + 1, lotLink(point.lot_no), formatTime(point.measured_at), spcFormat.format(point.value),
+        point.moving_range === null ? "—" : spcFormat.format(point.moving_range),
+        point.signals.map((signal) => signalLabels[signal]).join("、"),
+      ])] : []);
+      const monitored = Math.max(0, chart.points.length - chart.baseline_points);
+      showRows("spc-signals", rows, monitored ? "監測點尚未觸發規則。" : "此期間沒有可判定的監測點。", 6);
+      for (const [key, , limitKey] of charts) {
+        const limits = chart[limitKey];
+        const summary = limits
+          ? `下限 ${spcFormat.format(limits.lower)}　中心 ${spcFormat.format(limits.center)}　上限 ${spcFormat.format(limits.upper)} ${chart.unit}　｜　淡藍區為基準，橘點為訊號`
+          : `基準點不足，先顯示原始序列（${chart.unit}）。`;
+        document.getElementById(`${key}-limits`).textContent = summary;
+      }
+      results.hidden = false;
+      draw();
+      indicate(status, monitored
+        ? `共 ${chart.points.length} 筆量測，${monitored} 個監測點，${rows.length} 個點觸發規則。`
+        : `共 ${chart.points.length} 筆量測。需要超過 ${chart.baseline_points} 筆才有監測點。`);
+    } catch (error) {
+      if (current === requestId) indicate(status, error.message, true);
+    }
+  });
+}
+
 document.getElementById(`${tab}-page`).hidden = false;
 document.querySelector(`[data-tab="${tab}"]`).setAttribute("aria-current", "page");
 if (tab === "upload") configureUpload();
 if (tab === "history") configureHistory();
 if (tab === "records") configureRecords();
+if (tab === "spc") configureSpc();
 if (tab === "trace") {
   configureTrace();
   configurePeriodQTime();

@@ -69,6 +69,7 @@ td { overflow-wrap: anywhere; }
 .batch-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin: 0; }
 .batch-fields dt { color: var(--muted); font-size: 13px; }
 .batch-fields dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.control-chart { display: block; width: 100%; height: 230px; }
 @media (max-width: 600px) {
   .topbar-inner, main { padding-inline: 16px; }
   .topbar-inner { padding-block: 8px; }

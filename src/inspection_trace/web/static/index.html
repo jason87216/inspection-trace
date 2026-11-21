@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>Inspection Trace｜檢驗紀錄</title>
-  <link rel="stylesheet" href="/ui/style.css?v=p5">
-  <script type="module" src="/ui/app.js?v=p5"></script>
+  <link rel="stylesheet" href="/ui/style.css?v=p6">
+  <script type="module" src="/ui/app.js?v=p6"></script>
 </head>
 <body>
   <header class="topbar">
@@ -17,6 +17,7 @@
         <a href="/ui/?tab=history" data-tab="history">匯入歷史</a>
         <a href="/ui/?tab=records" data-tab="records">檢驗紀錄</a>
         <a href="/ui/?tab=trace" data-tab="trace">批號追溯</a>
+        <a href="/ui/?tab=spc" data-tab="spc">製程管制</a>
       </nav>
     </div>
   </header>
@@ -120,6 +121,34 @@
           <table><thead><tr><th scope="col">批號</th><th scope="col">站點區間</th><th scope="col">上游出站</th><th scope="col">下游進站</th><th scope="col">等待時間</th><th scope="col">上限</th><th scope="col">判定</th></tr></thead><tbody id="qtime-rows"></tbody></table>
         </div>
       </section>
+    </section>
+    <section id="spc-page" class="page" hidden aria-labelledby="spc-title">
+      <div><h1 id="spc-title">製程管制</h1><p class="lead">比較單筆量測和相鄰量測的變動。查詢期間最前面的量測點用來建立固定基準。</p></div>
+      <form id="spc-form" class="card filters">
+        <label class="field">檢驗項目<input name="item_code" maxlength="30" value="CORE_LW" required></label>
+        <label class="field">機台<input name="machine" maxlength="20" value="LIN-01" required></label>
+        <label class="field">基準點數<input name="baseline_points" type="number" min="5" max="200" value="20" required></label>
+        <label class="field">量測時間（起）<input name="from" type="datetime-local"></label>
+        <label class="field">量測時間（迄）<input name="to" type="datetime-local"></label>
+        <button class="btn primary" type="submit">查看管制圖</button>
+      </form>
+      <p id="spc-status" class="feedback" role="status"></p>
+      <div id="spc-results" class="stack" hidden>
+        <section class="card stack" aria-labelledby="individual-title">
+          <div><h2 id="individual-title">個別值（I）</h2><p class="note" id="individual-limits"></p></div>
+          <canvas class="control-chart" id="individual-chart" role="img" aria-labelledby="individual-title" aria-describedby="individual-limits"></canvas>
+        </section>
+        <section class="card stack" aria-labelledby="range-title">
+          <div><h2 id="range-title">移動全距（MR）</h2><p class="note" id="range-limits"></p></div>
+          <canvas class="control-chart" id="range-chart" role="img" aria-labelledby="range-title" aria-describedby="range-limits"></canvas>
+        </section>
+        <section class="card flush" aria-labelledby="spc-signals-title">
+          <div class="card-heading"><h2 id="spc-signals-title">異常訊號</h2></div>
+          <div class="table-wrap" tabindex="0" aria-label="異常訊號與量測">
+            <table><thead><tr><th scope="col">序號</th><th scope="col">批號</th><th scope="col">量測時間</th><th scope="col">量測值</th><th scope="col">移動全距</th><th scope="col">規則</th></tr></thead><tbody id="spc-signals"></tbody></table>
+          </div>
+        </section>
+      </div>
     </section>
   </main>
 </body>
