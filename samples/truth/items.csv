@@ -1,0 +1,15 @@
+code,name,station,kind,unit,lsl,target,usl,physical_min
+CORE_LW,內層線寬,C40,continuous,μm,45.0,50.0,55.0,0.0
+CORE_AOI_DEF,內層AOI缺陷數,C50,count,pcs,,0.0,3.0,0.0
+ABF_THK,ABF介電層厚度,B10,continuous,μm,27.0,30.0,33.0,0.0
+VIA_TOP_D,雷射孔上孔徑,B20,continuous,μm,55.0,60.0,65.0,0.0
+VIA_BOT_D,雷射孔下孔徑,B20,continuous,μm,40.0,45.0,50.0,0.0
+ELESS_CU,化學銅厚度,B40,continuous,μm,0.7,1.0,1.3,0.0
+PLT_CU,電鍍銅厚度,B60,continuous,μm,13.0,15.0,17.0,0.0
+BU_LW,增層線寬,B70,continuous,μm,15.0,18.0,21.0,0.0
+AOI_DEF,增層AOI缺陷數,B80,count,pcs,,0.0,3.0,0.0
+SR_THK,防焊厚度,F10,continuous,μm,10.0,15.0,25.0,0.0
+NI_THK,鎳厚,F20,continuous,μm,3.0,5.0,7.0,0.0
+AU_THK,金厚,F20,continuous,μm,0.03,0.05,0.08,0.0
+ET_FAIL,電測不良數,F40,count,pcs,,0.0,2.0,0.0
+WARPAGE,翹曲,F50,continuous,μm,,50.0,100.0,0.0

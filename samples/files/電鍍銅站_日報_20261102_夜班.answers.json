@@ -1,0 +1,12 @@
+{
+  "file": "電鍍銅站_日報_20261102_夜班.xlsx",
+  "source": "SRC_STATION",
+  "station": "B60",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": false,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 105,
+  "injections": []
+}

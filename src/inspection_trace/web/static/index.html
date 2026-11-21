@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <title>Inspection Trace｜檢驗紀錄</title>
+  <link rel="stylesheet" href="/ui/style.css?v=p5">
+  <script type="module" src="/ui/app.js?v=p5"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/ui/">Inspection Trace</a>
+      <nav class="nav" aria-label="主選單">
+        <a href="/ui/?tab=upload" data-tab="upload">上傳匯入</a>
+        <a href="/ui/?tab=history" data-tab="history">匯入歷史</a>
+        <a href="/ui/?tab=records" data-tab="records">檢驗紀錄</a>
+        <a href="/ui/?tab=trace" data-tab="trace">批號追溯</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section id="upload-page" class="page" hidden aria-labelledby="upload-title">
+      <div><h1 id="upload-title">上傳檢驗檔案</h1><p class="lead">支援舊系統與機台 CSV、站點日報與人工表單 Excel。單檔上限 5 MB。</p></div>
+      <form id="upload-form" class="card">
+        <div class="dropzone" id="dropzone">
+          <label for="files">選擇檢驗檔案</label>
+          <p class="note">可選多個檔案，或將檔案拖到這裡。</p>
+          <input type="file" accept=".csv,.xlsx" id="files" multiple required>
+          <button type="submit" class="btn primary">開始匯入</button>
+        </div>
+      </form>
+      <p id="upload-status" class="feedback" role="status"></p>
+      <div id="upload-results" class="stack"></div>
+    </section>
+
+    <section id="history-page" class="page" hidden aria-labelledby="history-title">
+      <div><h1 id="history-title">匯入歷史</h1><p class="lead">查看已入庫、退件與重複上傳的檔案。</p></div>
+      <form id="history-form" class="card toolbar">
+        <label class="field">結果
+          <select name="status"><option value="">全部</option><option value="ACCEPT">已入庫</option><option value="REJECT">拒絕入庫</option><option value="DUPLICATE_FILE">重複上傳</option></select>
+        </label>
+        <button class="btn primary" type="submit">篩選</button>
+      </form>
+      <p id="history-status" class="feedback" role="status"></p>
+      <div class="card flush">
+        <div class="table-wrap" tabindex="0" aria-label="匯入歷史資料">
+          <table><thead><tr><th scope="col">時間</th><th scope="col">檔案</th><th scope="col">來源</th><th scope="col">站點</th><th scope="col">結果</th><th scope="col">入庫</th><th scope="col">操作</th></tr></thead><tbody id="history-rows"></tbody></table>
+        </div>
+        <div class="pager" id="history-pager"></div>
+      </div>
+      <div id="history-detail"></div>
+    </section>
+
+    <section id="records-page" class="page" hidden aria-labelledby="records-title">
+      <div><h1 id="records-title">檢驗紀錄</h1><p class="lead">至少輸入一個查詢條件。時間以台北時間顯示，量測值以該項目的標準單位顯示。</p></div>
+      <form id="records-form" class="card filters">
+        <label class="field">批號<input name="lot_no" maxlength="30" placeholder="L261102A001"></label>
+        <label class="field">站點<input name="station_code" maxlength="20" placeholder="C40"></label>
+        <label class="field">檢驗項目<input name="item_code" maxlength="30" placeholder="CORE_LW"></label>
+        <label class="field">機台<input name="machine_code" maxlength="20" placeholder="LIN-01"></label>
+        <label class="field">量測時間（起）<input name="from" type="datetime-local"></label>
+        <label class="field">量測時間（迄）<input name="to" type="datetime-local"></label>
+        <label class="check"><input name="out_of_spec" type="checkbox"> 只看超規</label>
+        <button class="btn primary" type="submit">查詢</button>
+      </form>
+      <p id="records-status" class="feedback" role="status"></p>
+      <div class="card flush">
+        <div class="table-wrap" tabindex="0" aria-label="檢驗紀錄查詢結果">
+          <table><thead><tr><th scope="col">批號</th><th scope="col">站點／機台</th><th scope="col">項目</th><th scope="col">片／點</th><th scope="col">量測值</th><th scope="col">判定</th><th scope="col">量測時間</th><th scope="col">操作員</th><th scope="col">來源</th></tr></thead><tbody id="records-rows"></tbody></table>
+        </div>
+        <div class="pager" id="records-pager"></div>
+      </div>
+    </section>
+
+    <section id="trace-page" class="page" hidden aria-labelledby="trace-title">
+      <div><h1 id="trace-title">批號追溯</h1><p class="lead">往上找原料，往下找受影響的批號，並核對各站進出與等待時間。</p></div>
+      <form id="trace-form" class="card filters">
+        <label class="field">要追溯的批號<input name="lot_no" autocomplete="off" maxlength="30" placeholder="L261102A001" required></label>
+        <label class="field">追溯方向<select name="direction"><option value="up">往上游</option><option value="down">往下游</option></select></label>
+        <label class="field">最多追溯幾層<input name="max_depth" type="number" min="1" max="10" value="10" required></label>
+        <button class="btn primary" type="submit">追溯批號</button>
+      </form>
+      <p id="trace-status" class="feedback" role="status"></p>
+      <div id="trace-results" class="stack" hidden>
+        <section class="card stack" aria-labelledby="batch-title">
+          <h2 id="batch-title">批號詳情</h2>
+          <dl id="batch-fields" class="batch-fields"></dl>
+        </section>
+        <section class="card flush" aria-labelledby="links-title">
+          <div class="card-heading"><h2 id="links-title">批號關係</h2><p id="links-summary" class="note"></p></div>
+          <div class="table-wrap" tabindex="0" aria-label="批號關係">
+            <table><thead><tr><th scope="col">層數</th><th scope="col">上游批號</th><th scope="col">關係</th><th scope="col">下游批號</th></tr></thead><tbody id="trace-links"></tbody></table>
+          </div>
+        </section>
+        <section class="card flush" aria-labelledby="moves-title">
+          <div class="card-heading"><h2 id="moves-title">本批進出站</h2></div>
+          <div class="table-wrap" tabindex="0" aria-label="本批進出站">
+            <table><thead><tr><th scope="col">站點</th><th scope="col">機台</th><th scope="col">進站</th><th scope="col">出站</th><th scope="col">操作員</th></tr></thead><tbody id="trace-moves"></tbody></table>
+          </div>
+        </section>
+        <section class="card flush" aria-labelledby="batch-qtime-title">
+          <div class="card-heading"><h2 id="batch-qtime-title">本批 Q-time</h2></div>
+          <div class="table-wrap" tabindex="0" aria-label="本批 Q-time">
+            <table><thead><tr><th scope="col">站點區間</th><th scope="col">上游出站</th><th scope="col">下游進站</th><th scope="col">等待時間</th><th scope="col">上限</th><th scope="col">判定</th><th scope="col">分批來源</th></tr></thead><tbody id="trace-qtime"></tbody></table>
+          </div>
+        </section>
+      </div>
+      <section class="card stack" aria-labelledby="period-title">
+        <div><h2 id="period-title">依期間查 Q-time</h2><p class="note">輸入台北時間，最長 31 天。未進下游站時，依上游的紀錄時間篩選。</p></div>
+        <form id="qtime-form" class="filters">
+          <label class="field">期間開始<input name="from" type="datetime-local" required></label>
+          <label class="field">期間結束<input name="to" type="datetime-local" required></label>
+          <label class="check"><input name="over_only" type="checkbox"> 只看超時</label>
+          <button class="btn primary" type="submit">查詢等待時間</button>
+        </form>
+        <p id="qtime-status" class="feedback" role="status"></p>
+        <div id="qtime-results" class="table-wrap" tabindex="0" aria-label="期間 Q-time" hidden>
+          <table><thead><tr><th scope="col">批號</th><th scope="col">站點區間</th><th scope="col">上游出站</th><th scope="col">下游進站</th><th scope="col">等待時間</th><th scope="col">上限</th><th scope="col">判定</th></tr></thead><tbody id="qtime-rows"></tbody></table>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "file": "去膜閃蝕站_日報_20261102_夜班.xlsx",
+  "source": "SRC_STATION",
+  "station": "B70",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "REJECT",
+  "expected_record_count": 0,
+  "injections": [
+    {
+      "op": "D_DUP_ROW",
+      "category": "B",
+      "expected_error_code": "E_DUPLICATE_IN_FILE",
+      "row": 3,
+      "column": null,
+      "column_key": null,
+      "original_value": null,
+      "dirty_value": null,
+      "expected_normalized_value": null,
+      "tolerance": null,
+      "note": "exact copy of the previous row"
+    }
+  ]
+}

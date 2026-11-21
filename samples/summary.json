@@ -1,0 +1,31 @@
+{
+  "scale": "small",
+  "seed": 42,
+  "lots": 8,
+  "records": 1800,
+  "events": {
+    "EV_OOS_SPIKE": 7,
+    "EV_DRIFT": 1,
+    "EV_BATH_AGING": 3
+  },
+  "files": 21,
+  "outcomes": {
+    "REJECT": 8,
+    "ACCEPT": 11,
+    "DUPLICATE_FILE": 2
+  },
+  "injections": {
+    "D_DATE_FORMAT": 3,
+    "D_DUP_ROW": 2,
+    "D_FULLWIDTH": 1,
+    "D_HEADER_ALIAS": 9,
+    "D_LOT_TYPO": 1,
+    "D_NOT_NUMERIC": 1,
+    "D_PHYSICAL_IMPOSSIBLE": 3,
+    "D_REQUIRED_BLANK": 3,
+    "D_UNIT_ALIAS": 4,
+    "D_UNIT_UNKNOWN": 1,
+    "D_WHITESPACE": 4,
+    "F_DUP_FILE": 2
+  }
+}

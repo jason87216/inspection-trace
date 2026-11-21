@@ -1,0 +1,12 @@
+{
+  "file": "MES_OLD_C40_1151103.csv",
+  "source": "SRC_LEGACY",
+  "station": "C40",
+  "format": "csv",
+  "encoding": "cp950",
+  "header_row": 1,
+  "is_dirty": false,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 6,
+  "injections": []
+}

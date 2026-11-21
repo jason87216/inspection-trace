@@ -1,0 +1,60 @@
+# 弄髒設定。
+# category：A 應自動修正 / B 應拒絕 / C 系統抓不到（刻意設計）
+
+[files]
+clean_ratio = 0.4          # 完全不弄髒的檔案比例（用來驗證系統不會誤報）
+duplicate_ratio = 0.05     # 額外複製一份「重傳」檔案的比例
+
+# 每一列被選中埋入錯誤的機率（依來源）
+[row_rates]
+SRC_MACHINE = 0.004
+SRC_STATION = 0.02
+SRC_MANUAL = 0.06
+SRC_LEGACY = 0.02
+
+# 各來源可用的操作與權重
+[ops.SRC_MACHINE]
+D_DATE_FORMAT = 2
+D_REQUIRED_BLANK = 1
+D_DUP_ROW = 3
+D_PHYSICAL_IMPOSSIBLE = 1
+
+[ops.SRC_STATION]
+D_UNIT_MIL = 2
+D_UNIT_ALIAS = 2
+D_UNIT_UNKNOWN = 1
+D_DATE_FORMAT = 2
+D_REQUIRED_BLANK = 1
+D_NOT_NUMERIC = 2
+D_LOT_TYPO = 1
+D_REF_UNKNOWN = 1
+D_PHYSICAL_IMPOSSIBLE = 1
+D_DUP_ROW = 1
+D_WHITESPACE = 1
+
+[ops.SRC_MANUAL]
+D_FULLWIDTH = 3
+D_WHITESPACE = 3
+D_DATE_FORMAT = 2
+D_UNIT_ALIAS = 1
+D_REQUIRED_BLANK = 2
+D_NOT_NUMERIC = 3
+D_LOT_TYPO = 3
+D_REF_UNKNOWN = 1
+D_PHYSICAL_IMPOSSIBLE = 1
+D_DUP_ROW = 1
+D_TRANSPOSE = 2
+D_WRONG_MACHINE = 2
+
+[ops.SRC_LEGACY]
+D_UNIT_MIL = 2
+D_REQUIRED_BLANK = 1
+D_NOT_NUMERIC = 1
+D_LOT_TYPO = 1
+D_REF_UNKNOWN = 1
+D_DUP_ROW = 1
+
+# 檔案層級（每份要弄髒的檔案各自以此機率套用）
+[file_ops]
+D_HEADER_ALIAS = 0.35      # 換掉 1~2 個表頭成別名（STATION / MANUAL / LEGACY / MACHINE）
+D_LAYOUT_NOISE = 0.6       # 只用於 SRC_MANUAL：表中插入空白列、小計列

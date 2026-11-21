@@ -1,0 +1,26 @@
+{
+  "file": "ABF壓膜站_日報_20261102_夜班.xlsx",
+  "source": "SRC_STATION",
+  "station": "B10",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 75,
+  "injections": [
+    {
+      "op": "D_DATE_FORMAT",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 11,
+      "column": "量測時間",
+      "column_key": "time",
+      "original_value": "2026-11-02T23:58:43",
+      "dirty_value": "2026/11/02 23:58",
+      "expected_normalized_value": "2026-11-02T23:58:43",
+      "tolerance": 60,
+      "note": "tolerance in seconds"
+    }
+  ]
+}

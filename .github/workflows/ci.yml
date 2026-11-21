@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inspection
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: inspection_trace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U inspection -d inspection_trace"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://inspection:ci-only-password@localhost:5432/inspection_trace
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.13.8"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      - name: Migrations match models
+        run: uv run alembic check
+
+      - name: Tests
+        run: uv run pytest

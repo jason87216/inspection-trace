@@ -1,0 +1,26 @@
+{
+  "file": "AOI_export_C50_20261103.csv",
+  "source": "SRC_MACHINE",
+  "station": "C50",
+  "format": "csv",
+  "encoding": "utf-8",
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "REJECT",
+  "expected_record_count": 0,
+  "injections": [
+    {
+      "op": "D_PHYSICAL_IMPOSSIBLE",
+      "category": "B",
+      "expected_error_code": "E_OUT_OF_PHYSICAL_RANGE",
+      "row": 2,
+      "column": "value",
+      "column_key": "value",
+      "original_value": "0",
+      "dirty_value": "-4",
+      "expected_normalized_value": null,
+      "tolerance": null,
+      "note": null
+    }
+  ]
+}

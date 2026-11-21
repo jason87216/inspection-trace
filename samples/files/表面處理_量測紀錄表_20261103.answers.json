@@ -1,0 +1,12 @@
+{
+  "file": "表面處理_量測紀錄表_20261103.xlsx",
+  "source": "SRC_MANUAL",
+  "station": "F20",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 4,
+  "is_dirty": false,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 240,
+  "injections": []
+}

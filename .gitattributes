@@ -1,0 +1,6 @@
+# Store text files with LF on every machine (Windows, Linux containers, CI).
+* text=auto eol=lf
+
+# Sample files are stored byte for byte: duplicate-upload detection compares exact bytes,
+# and the legacy CSVs are Big5, not UTF-8.
+samples/** -text

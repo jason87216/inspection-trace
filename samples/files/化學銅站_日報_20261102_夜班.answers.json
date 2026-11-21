@@ -1,0 +1,52 @@
+{
+  "file": "化學銅站_日報_20261102_夜班.xlsx",
+  "source": "SRC_STATION",
+  "station": "B40",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 105,
+  "injections": [
+    {
+      "op": "D_HEADER_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 1,
+      "column": "機台編號",
+      "column_key": "machine",
+      "original_value": "機台",
+      "dirty_value": "機台編號",
+      "expected_normalized_value": "機台",
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_HEADER_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 1,
+      "column": "量測項目",
+      "column_key": "item",
+      "original_value": "檢驗項目",
+      "dirty_value": "量測項目",
+      "expected_normalized_value": "檢驗項目",
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_UNIT_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 5,
+      "column": "單位",
+      "column_key": "unit",
+      "original_value": "μm",
+      "dirty_value": "um",
+      "expected_normalized_value": "μm",
+      "tolerance": null,
+      "note": null
+    }
+  ]
+}

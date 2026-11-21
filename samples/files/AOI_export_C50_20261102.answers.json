@@ -1,0 +1,12 @@
+{
+  "file": "AOI_export_C50_20261102.csv",
+  "source": "SRC_MACHINE",
+  "station": "C50",
+  "format": "csv",
+  "encoding": "utf-8",
+  "header_row": 1,
+  "is_dirty": false,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 140,
+  "injections": []
+}

@@ -1,0 +1,52 @@
+{
+  "file": "ABF壓膜站_日報_20261102_日班.xlsx",
+  "source": "SRC_STATION",
+  "station": "B10",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 45,
+  "injections": [
+    {
+      "op": "D_HEADER_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 1,
+      "column": "機台編號",
+      "column_key": "machine",
+      "original_value": "機台",
+      "dirty_value": "機台編號",
+      "expected_normalized_value": "機台",
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_HEADER_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 1,
+      "column": "Lot",
+      "column_key": "lot",
+      "original_value": "批號",
+      "dirty_value": "Lot",
+      "expected_normalized_value": "批號",
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_UNIT_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 5,
+      "column": "單位",
+      "column_key": "unit",
+      "original_value": "μm",
+      "dirty_value": "µm",
+      "expected_normalized_value": "μm",
+      "tolerance": null,
+      "note": null
+    }
+  ]
+}

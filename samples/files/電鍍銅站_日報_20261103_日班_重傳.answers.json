@@ -1,0 +1,27 @@
+{
+  "file": "電鍍銅站_日報_20261103_日班_重傳.xlsx",
+  "source": "SRC_STATION",
+  "station": "B60",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "DUPLICATE_FILE",
+  "expected_record_count": 0,
+  "injections": [
+    {
+      "op": "D_UNIT_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 3,
+      "column": "單位",
+      "column_key": "unit",
+      "original_value": "μm",
+      "dirty_value": "um",
+      "expected_normalized_value": "μm",
+      "tolerance": null,
+      "note": null
+    }
+  ],
+  "duplicate_of": "電鍍銅站_日報_20261103_日班.xlsx"
+}

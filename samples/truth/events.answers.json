@@ -1,0 +1,121 @@
+[
+  {
+    "event": "EV_OOS_SPIKE",
+    "record_id": 109,
+    "lot_no": "L261102A001",
+    "item": "PLT_CU",
+    "value": 13.0,
+    "direction": "low"
+  },
+  {
+    "event": "EV_OOS_SPIKE",
+    "record_id": 843,
+    "lot_no": "L261102C004",
+    "item": "NI_THK",
+    "value": 7.15,
+    "direction": "high"
+  },
+  {
+    "event": "EV_OOS_SPIKE",
+    "record_id": 1451,
+    "lot_no": "L261102C007",
+    "item": "PLT_CU",
+    "value": 12.9,
+    "direction": "low"
+  },
+  {
+    "event": "EV_OOS_SPIKE",
+    "record_id": 1504,
+    "lot_no": "L261102C007",
+    "item": "SR_THK",
+    "value": 24.4,
+    "direction": "high"
+  },
+  {
+    "event": "EV_OOS_SPIKE",
+    "record_id": 1537,
+    "lot_no": "L261102C007",
+    "item": "AU_THK",
+    "value": 0.024,
+    "direction": "low"
+  },
+  {
+    "event": "EV_OOS_SPIKE",
+    "record_id": 1752,
+    "lot_no": "L261102B008",
+    "item": "AU_THK",
+    "value": 0.022,
+    "direction": "low"
+  },
+  {
+    "event": "EV_OOS_SPIKE",
+    "record_id": 1761,
+    "lot_no": "L261102B008",
+    "item": "AU_THK",
+    "value": 0.078,
+    "direction": "high"
+  },
+  {
+    "event": "EV_DRIFT",
+    "machine": "LDR-01",
+    "items": [
+      "VIA_TOP_D",
+      "VIA_BOT_D"
+    ],
+    "rate_per_lot": -0.35,
+    "start": "2026-11-02T19:29:36.758049",
+    "end": "2026-11-03T01:17:49.478319",
+    "lots": [
+      "L261102B002",
+      "L261102B005",
+      "L261102A006"
+    ]
+  },
+  {
+    "event": "EV_BATH_AGING",
+    "machine": "PLT-01",
+    "bath_no": 1,
+    "items": [
+      "PLT_CU"
+    ],
+    "start": "2026-11-02T23:16:24.241233",
+    "end": "2026-11-03T03:49:20.016688",
+    "lots": [
+      "L261102A001",
+      "L261102C004"
+    ],
+    "max_sd_multiplier": 1.12
+  },
+  {
+    "event": "EV_BATH_AGING",
+    "machine": "PLT-03",
+    "bath_no": 1,
+    "items": [
+      "PLT_CU"
+    ],
+    "start": "2026-11-03T00:18:45.185912",
+    "end": "2026-11-03T10:45:52.270153",
+    "lots": [
+      "L261102B002",
+      "L261102B008"
+    ],
+    "max_sd_multiplier": 1.12
+  },
+  {
+    "event": "EV_BATH_AGING",
+    "machine": "PLT-02",
+    "bath_no": 1,
+    "items": [
+      "PLT_CU"
+    ],
+    "start": "2026-11-03T03:14:13.467806",
+    "end": "2026-11-03T07:25:36.545242",
+    "lots": [
+      "L261102B003",
+      "L261102B005",
+      "L261102A006",
+      "L261102C007"
+    ],
+    "max_sd_multiplier": 1.36
+  }
+]

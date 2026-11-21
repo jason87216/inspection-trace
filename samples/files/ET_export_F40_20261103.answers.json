@@ -1,0 +1,12 @@
+{
+  "file": "ET_export_F40_20261103.csv",
+  "source": "SRC_MACHINE",
+  "station": "F40",
+  "format": "csv",
+  "encoding": "utf-8",
+  "header_row": 1,
+  "is_dirty": false,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 160,
+  "injections": []
+}

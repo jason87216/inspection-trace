@@ -1,0 +1,39 @@
+{
+  "file": "雷射鑽孔站_日報_20261102_日班.xlsx",
+  "source": "SRC_STATION",
+  "station": "B20",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "REJECT",
+  "expected_record_count": 0,
+  "injections": [
+    {
+      "op": "D_HEADER_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 1,
+      "column": "批次",
+      "column_key": "lot",
+      "original_value": "批號",
+      "dirty_value": "批次",
+      "expected_normalized_value": "批號",
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_DUP_ROW",
+      "category": "B",
+      "expected_error_code": "E_DUPLICATE_IN_FILE",
+      "row": 5,
+      "column": null,
+      "column_key": null,
+      "original_value": null,
+      "dirty_value": null,
+      "expected_normalized_value": null,
+      "tolerance": null,
+      "note": "exact copy of the previous row"
+    }
+  ]
+}

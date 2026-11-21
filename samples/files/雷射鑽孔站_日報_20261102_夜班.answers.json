@@ -1,0 +1,52 @@
+{
+  "file": "雷射鑽孔站_日報_20261102_夜班.xlsx",
+  "source": "SRC_STATION",
+  "station": "B20",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 180,
+  "injections": [
+    {
+      "op": "D_HEADER_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 1,
+      "column": "Lot",
+      "column_key": "lot",
+      "original_value": "批號",
+      "dirty_value": "Lot",
+      "expected_normalized_value": "批號",
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_HEADER_ALIAS",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 1,
+      "column": "設備",
+      "column_key": "machine",
+      "original_value": "機台",
+      "dirty_value": "設備",
+      "expected_normalized_value": "機台",
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_WHITESPACE",
+      "category": "A",
+      "expected_error_code": null,
+      "row": 20,
+      "column": "Lot",
+      "column_key": "lot",
+      "original_value": "L261102A006",
+      "dirty_value": "L261102 A006",
+      "expected_normalized_value": "L261102A006",
+      "tolerance": null,
+      "note": null
+    }
+  ]
+}

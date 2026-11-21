@@ -1,0 +1,52 @@
+[project]
+name = "inspection-trace"
+version = "0.1.0"
+description = "Inspection record digitization and lot traceability (portfolio project, simulated data only)."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.1",
+    "fastapi>=0.165.0",
+    "openpyxl>=3.1.5",
+    "psycopg[binary]>=3.3.9",
+    "pydantic-settings>=2.16.3",
+    "sqlalchemy>=2.1.9",
+    "uvicorn>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.2",
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes, I: import order, B: likely bugs, UP: modern syntax,
+# ANN: type annotations on every function (AGENTS.md rule).
+select = ["E", "F", "I", "B", "UP", "ANN"]
+
+[tool.ruff.lint.per-file-ignores]
+# generator/ is an existing tool kept in its own style: bug and import checks still apply,
+# but not this project's annotation and line-length rules.
+"generator/**" = ["ANN", "E501", "UP047"]
+"tests/generator/**" = ["ANN", "E501", "UP047"]
+# Generated migrations keep SQL expressions (e.g. CHECK bodies) on one line.
+"migrations/versions/**" = ["E501"]
+
+[tool.ruff.format]
+line-ending = "lf"
+exclude = ["generator/**", "tests/generator/**"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Project root on sys.path so tests can import generator/ (it is not part of the src/ package).
+pythonpath = ["."]
+markers = ["integration: needs a running PostgreSQL reachable via DATABASE_URL"]

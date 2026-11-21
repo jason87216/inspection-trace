@@ -1,0 +1,39 @@
+{
+  "file": "MES_OLD_C40_1151102.csv",
+  "source": "SRC_LEGACY",
+  "station": "C40",
+  "format": "csv",
+  "encoding": "cp950",
+  "header_row": 1,
+  "is_dirty": true,
+  "expected_outcome": "REJECT",
+  "expected_record_count": 0,
+  "injections": [
+    {
+      "op": "D_REQUIRED_BLANK",
+      "category": "B",
+      "expected_error_code": "E_REQUIRED_MISSING",
+      "row": 41,
+      "column": "VAL",
+      "column_key": "value",
+      "original_value": "49.6",
+      "dirty_value": null,
+      "expected_normalized_value": null,
+      "tolerance": null,
+      "note": null
+    },
+    {
+      "op": "D_NOT_NUMERIC",
+      "category": "B",
+      "expected_error_code": "E_NOT_NUMERIC",
+      "row": 78,
+      "column": "VAL",
+      "column_key": "value",
+      "original_value": "49.4",
+      "dirty_value": "量不到",
+      "expected_normalized_value": null,
+      "tolerance": null,
+      "note": null
+    }
+  ]
+}

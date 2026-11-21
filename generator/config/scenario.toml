@@ -1,0 +1,411 @@
+# 模擬情境。所有數值皆為模擬設定，不代表任何公司的真實製程或規格。
+
+[scenario]
+company = "Demo Substrate Co."
+start = "2026-11-02T08:00:00"
+release_interval_hours = 1.5
+panels_per_lot = 20
+sample_panels = 3          # 連續型項目每批抽幾片
+points_per_panel = 5       # 每片量幾個點
+qtime_limit_hours = 8.0    # 雷射鑽孔(B20)完成 -> 電鍍銅(B60)開始
+operators = 12
+lot_pattern = '^L\d{6}[A-Z]\d{3}(-S\d)?$'
+
+[scale]
+small = 8
+medium = 60
+large = 600
+
+[materials]
+abf_lots_per_material = 6     # 一個 ABF 膜批供應幾個生產批
+core_lots_per_material = 8
+
+[[parts]]
+part_no = "PN-ABF-1001"
+name = "伺服器處理器載板 A"
+line = "A"
+
+[[parts]]
+part_no = "PN-ABF-1002"
+name = "網通晶片載板 B"
+line = "B"
+
+[[parts]]
+part_no = "PN-ABF-1003"
+name = "AI 加速器載板 C"
+line = "C"
+
+# ---------------------------------------------------------------- 站點
+# source：這個站點的資料由哪一種來源產生
+#   SRC_LEGACY  舊系統匯出 CSV（Big5）
+#   SRC_MACHINE 機台自動匯出 CSV
+#   SRC_STATION 站點日報 Excel（寬表 P1..P5）
+#   SRC_MANUAL  人工抄錄 Excel
+
+[[stations]]
+code = "C10"
+name = "裁板"
+machine_prefix = "CUT"
+machines = 1
+queue_hours = [0.3, 0.1]      # 平均, 標準差
+process_hours = [0.4, 0.1]
+
+[[stations]]
+code = "C20"
+name = "機械鑽孔"
+machine_prefix = "MDR"
+machines = 3
+queue_hours = [0.5, 0.2]
+process_hours = [1.5, 0.3]
+
+[[stations]]
+code = "C30"
+name = "鍍通孔"
+machine_prefix = "PTH"
+machines = 2
+queue_hours = [0.5, 0.2]
+process_hours = [1.2, 0.2]
+
+[[stations]]
+code = "C40"
+name = "內層線路"
+machine_prefix = "LIN"
+machines = 2
+source = "SRC_LEGACY"
+queue_hours = [0.5, 0.2]
+process_hours = [1.0, 0.2]
+
+[[stations]]
+code = "C50"
+name = "內層AOI"
+machine_prefix = "AOC"
+machines = 2
+source = "SRC_MACHINE"
+queue_hours = [0.3, 0.1]
+process_hours = [0.5, 0.1]
+
+[[stations]]
+code = "B10"
+name = "ABF壓膜"
+machine_prefix = "LAM"
+machines = 2
+source = "SRC_STATION"
+queue_hours = [0.5, 0.2]
+process_hours = [1.0, 0.2]
+
+[[stations]]
+code = "B20"
+name = "雷射鑽孔"
+machine_prefix = "LDR"
+machines = 3
+source = "SRC_STATION"
+queue_hours = [0.4, 0.2]
+process_hours = [1.2, 0.2]
+
+[[stations]]
+code = "B30"
+name = "除膠渣"
+machine_prefix = "DSM"
+machines = 2
+queue_hours = [0.4, 0.2]
+process_hours = [0.6, 0.1]
+
+[[stations]]
+code = "B40"
+name = "化學銅"
+machine_prefix = "ELC"
+machines = 2
+source = "SRC_STATION"
+queue_hours = [0.4, 0.2]
+process_hours = [0.8, 0.1]
+
+[[stations]]
+code = "B50"
+name = "曝光顯影"
+machine_prefix = "EXP"
+machines = 2
+queue_hours = [0.4, 0.2]
+process_hours = [0.7, 0.1]
+
+[[stations]]
+code = "B60"
+name = "電鍍銅"
+machine_prefix = "PLT"
+machines = 3
+source = "SRC_STATION"
+queue_hours = [0.4, 0.2]
+process_hours = [1.5, 0.2]
+
+[[stations]]
+code = "B70"
+name = "去膜閃蝕"
+machine_prefix = "ETC"
+machines = 2
+source = "SRC_STATION"
+queue_hours = [0.3, 0.1]
+process_hours = [0.6, 0.1]
+
+[[stations]]
+code = "B80"
+name = "增層AOI"
+machine_prefix = "AOB"
+machines = 2
+source = "SRC_MACHINE"
+queue_hours = [0.3, 0.1]
+process_hours = [0.5, 0.1]
+
+[[stations]]
+code = "F10"
+name = "防焊"
+machine_prefix = "SRM"
+machines = 2
+source = "SRC_MANUAL"
+queue_hours = [0.6, 0.2]
+process_hours = [1.2, 0.2]
+
+[[stations]]
+code = "F20"
+name = "表面處理"
+machine_prefix = "SFT"
+machines = 2
+source = "SRC_MANUAL"
+queue_hours = [0.6, 0.2]
+process_hours = [1.0, 0.2]
+
+[[stations]]
+code = "F30"
+name = "成型"
+machine_prefix = "RTR"
+machines = 2
+queue_hours = [0.4, 0.2]
+process_hours = [0.8, 0.1]
+
+[[stations]]
+code = "F40"
+name = "電測"
+machine_prefix = "ETS"
+machines = 3
+source = "SRC_MACHINE"
+queue_hours = [0.4, 0.2]
+process_hours = [0.9, 0.1]
+
+[[stations]]
+code = "F50"
+name = "終檢"
+machine_prefix = "FQC"
+machines = 2
+source = "SRC_MANUAL"
+queue_hours = [0.4, 0.2]
+process_hours = [0.6, 0.1]
+
+# ---------------------------------------------------------------- 檢驗項目
+# kind: continuous（連續量測）/ count（計數，每片一筆）
+# lsl/usl：規格下限/上限；physical_min：低於此值為物理上不可能
+
+[[items]]
+code = "CORE_LW"
+name = "內層線寬"
+station = "C40"
+kind = "continuous"
+unit = "μm"
+lsl = 45.0
+target = 50.0
+usl = 55.0
+sd = 1.2
+decimals = 1
+physical_min = 0.0
+
+[[items]]
+code = "CORE_AOI_DEF"
+name = "內層AOI缺陷數"
+station = "C50"
+kind = "count"
+unit = "pcs"
+target = 0.0
+usl = 3.0
+mean = 0.2
+physical_min = 0.0
+
+[[items]]
+code = "ABF_THK"
+name = "ABF介電層厚度"
+station = "B10"
+kind = "continuous"
+unit = "μm"
+lsl = 27.0
+target = 30.0
+usl = 33.0
+sd = 0.6
+decimals = 1
+physical_min = 0.0
+
+[[items]]
+code = "VIA_TOP_D"
+name = "雷射孔上孔徑"
+station = "B20"
+kind = "continuous"
+unit = "μm"
+lsl = 55.0
+target = 60.0
+usl = 65.0
+sd = 0.9
+decimals = 1
+physical_min = 0.0
+
+[[items]]
+code = "VIA_BOT_D"
+name = "雷射孔下孔徑"
+station = "B20"
+kind = "continuous"
+unit = "μm"
+lsl = 40.0
+target = 45.0
+usl = 50.0
+sd = 0.9
+decimals = 1
+physical_min = 0.0
+
+[[items]]
+code = "ELESS_CU"
+name = "化學銅厚度"
+station = "B40"
+kind = "continuous"
+unit = "μm"
+lsl = 0.7
+target = 1.0
+usl = 1.3
+sd = 0.06
+decimals = 2
+physical_min = 0.0
+
+[[items]]
+code = "PLT_CU"
+name = "電鍍銅厚度"
+station = "B60"
+kind = "continuous"
+unit = "μm"
+lsl = 13.0
+target = 15.0
+usl = 17.0
+sd = 0.4
+decimals = 1
+physical_min = 0.0
+
+[[items]]
+code = "BU_LW"
+name = "增層線寬"
+station = "B70"
+kind = "continuous"
+unit = "μm"
+lsl = 15.0
+target = 18.0
+usl = 21.0
+sd = 0.6
+decimals = 1
+physical_min = 0.0
+
+[[items]]
+code = "AOI_DEF"
+name = "增層AOI缺陷數"
+station = "B80"
+kind = "count"
+unit = "pcs"
+target = 0.0
+usl = 3.0
+mean = 0.3
+physical_min = 0.0
+
+[[items]]
+code = "SR_THK"
+name = "防焊厚度"
+station = "F10"
+kind = "continuous"
+unit = "μm"
+lsl = 10.0
+target = 15.0
+usl = 25.0
+sd = 1.5
+decimals = 1
+physical_min = 0.0
+
+[[items]]
+code = "NI_THK"
+name = "鎳厚"
+station = "F20"
+kind = "continuous"
+unit = "μm"
+lsl = 3.0
+target = 5.0
+usl = 7.0
+sd = 0.35
+decimals = 2
+physical_min = 0.0
+
+[[items]]
+code = "AU_THK"
+name = "金厚"
+station = "F20"
+kind = "continuous"
+unit = "μm"
+lsl = 0.03
+target = 0.05
+usl = 0.08
+sd = 0.004
+decimals = 3
+physical_min = 0.0
+
+[[items]]
+code = "ET_FAIL"
+name = "電測不良數"
+station = "F40"
+kind = "count"
+unit = "pcs"
+target = 0.0
+usl = 2.0
+mean = 0.15
+physical_min = 0.0
+
+[[items]]
+code = "WARPAGE"
+name = "翹曲"
+station = "F50"
+kind = "continuous"
+unit = "μm"
+target = 50.0
+usl = 100.0
+sd = 12.0
+decimals = 0
+physical_min = 0.0
+
+# ---------------------------------------------------------------- 製程事件
+
+[events.drift]                 # 雷射機台功率衰減 -> 孔徑逐批變小，保養後歸零
+machines = ["LDR-01"]
+items = ["VIA_TOP_D", "VIA_BOT_D"]
+rate_per_lot = -0.35           # 每經過一批的偏移量（μm）
+pm_interval_lots = 10          # 該機台每處理幾批做一次保養
+
+[events.material_shift]        # 從第 N 個 ABF 膜批開始，介電層厚度跳一階
+item = "ABF_THK"
+from_material_index = 3        # 0 起算
+delta = 1.8
+
+[events.bath_aging]            # 電鍍藥水老化 -> 變異變大，換槽後恢復
+items = ["PLT_CU"]
+aging_per_lot = 0.12           # 標準差倍率每批增加
+bath_interval_lots = 12
+
+[events.qtime_over]            # 雷射到電鍍等太久 -> 後段缺陷增加
+probability = 0.06
+extra_wait_hours = [6.0, 12.0]
+affected_items = ["AOI_DEF", "ET_FAIL"]
+mean_multiplier = 5.0
+
+[events.oos_spike]             # 偶發單點異常（超出規格，但不是資料錯誤）
+probability_per_value = 0.002
+sigma = 6.0
+
+[events.split]                 # 防焊重工分批
+probability = 0.08
+at_station = "F10"
+child_panels = 5

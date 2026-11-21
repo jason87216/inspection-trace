@@ -1,0 +1,30 @@
+# Python
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+/pytest-of-*/
+.ruff_cache/
+
+# Local settings, drafts, and secrets
+.env
+.env.*
+!.env.example
+/.claude/
+/.local/
+/docs/PROMPTS.md
+/docs/mockups/
+*.key
+*.pem
+
+# Generated data and local storage
+/out/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# OS / editor
+Thumbs.db
+.DS_Store

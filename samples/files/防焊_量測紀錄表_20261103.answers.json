@@ -1,0 +1,12 @@
+{
+  "file": "防焊_量測紀錄表_20261103.xlsx",
+  "source": "SRC_MANUAL",
+  "station": "F10",
+  "format": "xlsx",
+  "encoding": null,
+  "header_row": 4,
+  "is_dirty": false,
+  "expected_outcome": "ACCEPT",
+  "expected_record_count": 120,
+  "injections": []
+}
