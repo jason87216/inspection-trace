@@ -143,16 +143,9 @@ uv run python -m scripts.evaluate_investigation --output out/investigation-basel
 uv run python -m scripts.evaluate_investigation --base-url http://127.0.0.1:8080/v1 --model MODEL_NAME --output out/investigation-model.json
 ```
 
-評估時模型只收到案例批號、調查範本與它實際查到的資料，並且每案例最多呼叫工具 8 次。報告分開列出根因命中、具可核對證據的命中、無效引用、格式錯誤及平均工具呼叫數。
+評估時模型只收到案例批號、調查範本與實際查到的資料。工具呼叫及輸出限制由評估程式設定，報告會分別呈現根因、證據引用、格式與工具使用情況。
 
-下表是調整證據評分規則前的本機對照。使用中型樣本（seed 42），在獨立的 PostgreSQL 匯入 78 份模擬報表，從漂移、原料突變、槽液老化及 Q-time 超時各取一案。Qwen3-8B 使用 llama.cpp 的工具呼叫模式，兩組皆使用相同的批號及事件答案。
-
-| 方法 | 根因與對象命中 | 具證據命中 | 平均工具呼叫 | 無充分證據的結論 | 格式錯誤 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Q-time 規則基線 | 1/4 | 1/4 | 1.00 | 0 | 0 |
-| Qwen3-8B Q4_K_M | 0/4 | 0/4 | 2.75 | 3 | 1 |
-
-規則基線命中 Q-time 超時。Qwen3-8B 在原料突變案例辨認出事件類型，但把生產批號填成原料批號。四案各只代表一種情境，這組分數用來揭露輸出與引用問題。可用 `--events` 指向另一份事件答案檔，並在資料庫載入相對應的模擬報表。
+AI 自主根因調查仍屬實驗性功能，尚未達到可作為穩定自動判斷工具的程度。階段性的模型測試結果與原始工具紀錄保留於本機，待完成更完整的驗證後再公開成果。
 
 若使用遠端 HTTPS 模型，需明確帶上 `--allow-remote-model`，並將憑證放入 `INSPECTION_MODEL_API_KEY` 環境變數。評估僅使用模擬資料。 [工具呼叫格式](https://platform.openai.com/docs/guides/function-calling)
 
