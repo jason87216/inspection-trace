@@ -18,11 +18,12 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY README.md alembic.ini ./
 COPY migrations ./migrations
 COPY src ./src
+COPY generator ./generator
 COPY samples/truth/operators.csv ./samples/truth/operators.csv
 RUN uv sync --locked --no-dev
 
 # Run as an unprivileged user. Files stay owned by root, so the app cannot modify itself.
-RUN useradd --create-home --uid 10001 app
+RUN useradd --create-home --uid 10001 app && install -d -o app -g app /app/scenario-data
 USER app
 
 ENV PATH="/app/.venv/bin:$PATH"

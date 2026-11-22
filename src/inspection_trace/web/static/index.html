@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>Inspection Trace｜檢驗紀錄</title>
-  <link rel="stylesheet" href="/ui/style.css?v=p6">
-  <script type="module" src="/ui/app.js?v=p6"></script>
+  <link rel="stylesheet" href="/ui/style.css?v=p11">
+  <script type="module" src="/ui/app.js?v=p11"></script>
 </head>
 <body>
   <header class="topbar">
@@ -18,6 +18,7 @@
         <a href="/ui/?tab=records" data-tab="records">檢驗紀錄</a>
         <a href="/ui/?tab=trace" data-tab="trace">批號追溯</a>
         <a href="/ui/?tab=spc" data-tab="spc">製程管制</a>
+        <a href="/ui/?tab=scenarios" data-tab="scenarios">模擬情境</a>
       </nav>
     </div>
   </header>
@@ -147,6 +148,48 @@
           <div class="table-wrap" tabindex="0" aria-label="異常訊號與量測">
             <table><thead><tr><th scope="col">序號</th><th scope="col">批號</th><th scope="col">量測時間</th><th scope="col">量測值</th><th scope="col">移動全距</th><th scope="col">規則</th></tr></thead><tbody id="spc-signals"></tbody></table>
           </div>
+        </section>
+      </div>
+    </section>
+    <section id="scenarios-page" class="page" hidden aria-labelledby="scenarios-title">
+      <div><h1 id="scenarios-title">模擬情境</h1><p class="lead">編輯製程預設，預覽驗證後建立獨立的模擬資料集。</p></div>
+      <section class="card stack" aria-label="情境預設">
+        <div class="toolbar">
+          <label class="field">情境預設<select id="scenario-select"></select></label>
+          <button class="btn" id="scenario-new" type="button">新建情境</button>
+          <button class="btn" id="scenario-copy" type="button">複製為自訂情境</button>
+          <button class="btn" id="scenario-restore" type="button">載入內建 ABF</button>
+        </div>
+        <details>
+          <summary>匯入設定檔</summary>
+          <div class="toolbar configuration-import">
+            <label class="field">情境 JSON 或 TOML<input id="scenario-import-file" type="file" accept=".json,.toml"></label>
+            <label class="field">髒資料 TOML（選填）<input id="scenario-import-dirty" type="file" accept=".toml"></label>
+            <button class="btn" id="scenario-import" type="button">載入設定檔</button>
+          </div>
+        </details>
+      </section>
+      <p id="scenario-notice" class="feedback" role="status"></p>
+      <div id="scenario-workspace" class="stack" hidden>
+        <fieldset id="scenario-editor" class="scenario-editor stack">
+          <legend class="visually-hidden">情境編輯</legend>
+        </fieldset>
+        <section class="card stack" aria-labelledby="scenario-run-title">
+          <div><h2 id="scenario-run-title">驗證與產生</h2><p class="note">相同設定、規模與亂數種子可重現量測及事件。下載的 ZIP 包含真值、報表與答案。</p></div>
+          <div class="toolbar">
+            <label class="field">規模<select id="scenario-scale"><option value="small">小型</option><option value="medium">中型</option><option value="large">大型</option></select></label>
+            <label class="field">亂數種子<input id="scenario-seed" type="number" min="0" max="4294967295" value="42" required></label>
+            <button class="btn" id="scenario-preview" type="button">預覽與驗證</button>
+            <button class="btn primary" id="scenario-save" type="button">儲存預設</button>
+            <button class="btn" id="scenario-export" type="button">匯出設定 JSON</button>
+            <button class="btn" id="scenario-delete" type="button">移除自訂預設</button>
+          </div>
+          <div id="scenario-validation" class="stack" role="status"></div>
+          <div class="toolbar">
+            <label class="check"><input id="scenario-confirm" type="checkbox" disabled> 確認以目前預覽的設定產生資料</label>
+            <button class="btn primary" id="scenario-generate" type="button" disabled>產生資料集</button>
+          </div>
+          <div id="scenario-download" class="actions" role="status"></div>
         </section>
       </div>
     </section>

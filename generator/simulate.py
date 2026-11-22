@@ -24,10 +24,8 @@ class Lot:
     lot_no: str
     part_no: str
     panels: list[int]
-    abf_lot: str
-    core_lot: str
+    materials: dict[str, MaterialLot]
     release: datetime
-    abf_index: int
     parent: str | None = None
     qtime_hours: float | None = None
 
@@ -106,6 +104,8 @@ class Simulator:
         self.spike = ev["oos_spike"]
         self.split = ev["split"]
         self.qtime_limit = cfg.scenario["qtime_limit_hours"]
+        self.qtime_route = cfg.qtime_route()
+        self.material_kind = self.mat.get("material_kind", "ABF")
         # fixed per-machine bias for every measured item
         self.bias: dict[tuple[str, str], float] = {}
         for item in cfg.items:
@@ -114,7 +114,9 @@ class Simulator:
             for m in master.machines[item.station]:
                 self.bias[(m, item.code)] = rng.gauss(0, 0.25 * item.sd)
         # event state
-        self.drift_count = {m: 0 for m in self.drift["machines"]}
+        self.drift_count = (
+            {m: 0 for m in self.drift["machines"]} if self.drift.get("enabled", True) else {}
+        )
         self.drift_segment: dict[str, dict[str, Any]] = {}
         self.bath_count: dict[str, int] = {}
         self.bath_segment: dict[str, dict[str, Any]] = {}
@@ -128,25 +130,20 @@ class Simulator:
         interval = timedelta(hours=sc["release_interval_hours"])
         seq_per_day: dict[str, int] = {}
         lots = []
-        abf_per = self.cfg.materials["abf_lots_per_material"]
-        core_per = self.cfg.materials["core_lots_per_material"]
+        rates = self.cfg.material_rates()
         for i in range(count):
             release = start + i * interval
             part = self.rng.choice(self.cfg.parts)
             day = release.strftime("%y%m%d")
             seq_per_day[day] = seq_per_day.get(day, 0) + 1
             lot_no = f"L{day}{part.line}{seq_per_day[day]:03d}"
-            abf: MaterialLot = self.master.abf_lots[i // abf_per]
-            core: MaterialLot = self.master.core_lots[i // core_per]
             lots.append(
                 Lot(
                     lot_no=lot_no,
                     part_no=part.part_no,
                     panels=list(range(1, sc["panels_per_lot"] + 1)),
-                    abf_lot=abf.lot_no,
-                    core_lot=core.lot_no,
+                    materials={kind: self.master.materials[kind][i // rate] for kind, rate in rates.items()},
                     release=release,
-                    abf_index=abf.index,
                 )
             )
         return lots
@@ -156,10 +153,9 @@ class Simulator:
         res = self.result
         for lot in self.make_lots(lot_count):
             res.lots.append(lot)
-            res.links.append(Link(lot.abf_lot, lot.lot_no, "consume"))
-            res.links.append(Link(lot.core_lot, lot.lot_no, "consume"))
-            force_qtime = self.rng.random() < self.qtime["probability"]
-            self._walk(lot, 0, lot.release, force_qtime, b20_end=None)
+            res.links.extend(Link(material.lot_no, lot.lot_no, "consume") for material in lot.materials.values())
+            force_qtime = self.qtime_route is not None and self.rng.random() < self.qtime["probability"]
+            self._walk(lot, 0, lot.release, force_qtime, upstream_end=None)
         self._close_segments()
         return res
 
@@ -169,20 +165,22 @@ class Simulator:
         start_index: int,
         t: datetime,
         force_qtime: bool,
-        b20_end: datetime | None,
+        upstream_end: datetime | None,
     ) -> None:
+        from_station, to_station = self.qtime_route or (None, None)
         for idx in range(start_index, len(self.routing)):
             code = self.routing[idx]
             if (
-                code == self.split["at_station"]
+                self.split.get("enabled", True)
+                and code == self.split["at_station"]
                 and lot.parent is None
                 and self.rng.random() < self.split["probability"]
             ):
                 child = self._split(lot)
-                self._walk(child, idx, t, False, b20_end)
+                self._walk(child, idx, t, False, upstream_end)
             st = self.cfg.station(code)
             queue = max(0.05, self.rng.gauss(*st.queue_hours))
-            if code == "B60" and force_qtime:
+            if code == to_station and force_qtime:
                 queue += self.rng.uniform(*self.qtime["extra_wait_hours"])
             start = t + timedelta(hours=queue)
             process = max(0.1, self.rng.gauss(*st.process_hours))
@@ -191,17 +189,17 @@ class Simulator:
             operator = self.rng.choice(self.master.operators)
             self.result.moves.append(Move(lot.lot_no, code, machine, start, end, operator))
 
-            if code == "B20":
-                b20_end = end
-            if code == "B60" and b20_end is not None:
-                lot.qtime_hours = round((start - b20_end).total_seconds() / 3600, 2)
+            if code == from_station:
+                upstream_end = end
+            if code == to_station and upstream_end is not None:
+                lot.qtime_hours = round((start - upstream_end).total_seconds() / 3600, 2)
                 if lot.qtime_hours > self.qtime_limit:
                     self.result.events.append(
                         {
                             "event": "EV_QTIME_OVER",
                             "lot_no": lot.lot_no,
-                            "from_station": "B20",
-                            "to_station": "B60",
+                            "from_station": from_station,
+                            "to_station": to_station,
                             "qtime_hours": lot.qtime_hours,
                             "limit_hours": self.qtime_limit,
                             "affected_items": self.qtime["affected_items"],
@@ -220,10 +218,8 @@ class Simulator:
             lot_no=f"{lot.lot_no}-S1",
             part_no=lot.part_no,
             panels=child_panels,
-            abf_lot=lot.abf_lot,
-            core_lot=lot.core_lot,
+            materials=lot.materials,
             release=lot.release,
-            abf_index=lot.abf_index,
             parent=lot.lot_no,
             qtime_hours=lot.qtime_hours,
         )
@@ -255,7 +251,7 @@ class Simulator:
                     value = poisson(self.rng, item.mean * mult)
                     self._add(lot, station, machine, item, panel, None, value, operator, start, end)
             else:
-                n = min(sc["sample_panels"], len(lot.panels))
+                n = min(item.sample_panels or sc["sample_panels"], len(lot.panels))
                 for panel in sorted(self.rng.sample(lot.panels, n)):
                     for point in range(1, sc["points_per_panel"] + 1):
                         value = self._continuous_value(lot, item, machine)
@@ -265,15 +261,21 @@ class Simulator:
                         self._maybe_spike(rid, item)
 
     def _continuous_value(self, lot: Lot, item: Item, machine: str) -> float:
-        mean = item.target + self.bias[(machine, item.code)]
+        center = item.target if item.simulation_mean is None else item.simulation_mean
+        mean = center + self.bias[(machine, item.code)]
         sd = item.sd
         if machine in self.drift_count and item.code in self.drift["items"]:
             mean += self.drift["rate_per_lot"] * self.drift_count[machine]
-        if item.code == self.mat["item"] and lot.abf_index >= self.mat["from_material_index"]:
+        if item.code == self.mat["item"] and self._material_shifted(lot):
             mean += self.mat["delta"]
-        if item.code in self.bath["items"]:
+        if self.bath.get("enabled", True) and item.code in self.bath["items"]:
             sd *= 1 + self.bath["aging_per_lot"] * self.bath_count.get(machine, 0)
-        return round(self.rng.gauss(mean, sd), item.decimals)
+        value = round(self.rng.gauss(mean, sd), item.decimals)
+        return max(item.physical_min, value) if "kinds" in self.cfg.materials else value
+
+    def _material_shifted(self, lot: Lot) -> bool:
+        material = lot.materials.get(self.material_kind)
+        return bool(self.mat.get("enabled", True) and material and material.index >= self.mat["from_material_index"])
 
     def _add(
         self,
@@ -311,13 +313,28 @@ class Simulator:
         return rec.record_id
 
     def _maybe_spike(self, record_id: int, item: Item) -> None:
-        if self.rng.random() >= self.spike["probability_per_value"]:
+        selected = self.spike.get("items", [])
+        if (
+            not self.spike.get("enabled", True)
+            or (selected and item.code not in selected)
+            or self.rng.random() >= self.spike["probability_per_value"]
+        ):
             return
         rec = self.result.records[-1]
         direction = self.rng.choice([-1, 1])
-        rec.value = round(rec.value + direction * self.spike["sigma"] * item.sd, item.decimals)
+        if "kinds" in self.cfg.materials:
+            step = 10 ** -item.decimals
+            if direction < 0 and (item.lsl is None or item.lsl - step < item.physical_min):
+                direction = 1
+            proposed = rec.value + direction * self.spike["sigma"] * item.sd
+            if direction > 0:
+                rec.value = round(max(proposed, item.usl + step), item.decimals)
+            else:
+                rec.value = round(max(item.physical_min, min(proposed, item.lsl - step)), item.decimals)
+        else:
+            rec.value = round(rec.value + direction * self.spike["sigma"] * item.sd, item.decimals)
         if rec.value < item.physical_min:  # keep it physically possible
-            rec.value = round(item.physical_min + item.sd, item.decimals)
+            rec.value = max(item.physical_min, round(item.physical_min + item.sd, item.decimals))
         self.result.events.append(
             {
                 "event": "EV_OOS_SPIKE",
@@ -345,7 +362,7 @@ class Simulator:
                 )
                 self.drift_count[machine] = 0
 
-        if station == self.cfg.item(self.bath["items"][0]).station:
+        if self.bath.get("enabled", True) and any(item.code in self.bath["items"] for item in self.cfg.items_for(station)):
             seg = self.bath_segment.setdefault(
                 machine,
                 {"start": end, "lots": [], "bath_no": self.bath_no.get(machine, 1)},
@@ -358,12 +375,11 @@ class Simulator:
                 self.bath_count[machine] = 0
                 self.bath_no[machine] = self.bath_no.get(machine, 1) + 1
 
-        mat_station = self.cfg.item(self.mat["item"]).station
-        if station == mat_station and lot.abf_index >= self.mat["from_material_index"]:
+        if self._material_shifted(lot) and station == self.cfg.item(self.mat["item"]).station:
             if self.mat_event is None:
                 self.mat_event = {
                     "event": "EV_MAT_SHIFT",
-                    "material_lot": lot.abf_lot,
+                    "material_lot": lot.materials[self.material_kind].lot_no,
                     "item": self.mat["item"],
                     "delta": self.mat["delta"],
                     "start": end.isoformat(),
@@ -426,11 +442,11 @@ def _iso(v: Any) -> Any:
 def write_truth(cfg: Config, master: MasterData, res: SimResult, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
 
-    def dump(name: str, rows: list[dict[str, Any]]) -> None:
+    def dump(name: str, rows: list[dict[str, Any]], columns: list[str] | None = None) -> None:
         with (out / name).open("w", newline="", encoding="utf-8") as f:
-            if not rows:
+            if not rows and columns is None:
                 return
-            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            w = csv.DictWriter(f, fieldnames=columns or list(rows[0].keys()))
             w.writeheader()
             for r in rows:
                 w.writerow({k: _iso(v) for k, v in r.items()})
@@ -466,7 +482,8 @@ def write_truth(cfg: Config, master: MasterData, res: SimResult, out: Path) -> N
     dump("parts.csv", [asdict(p) for p in cfg.parts])
     dump(
         "materials.csv",
-        [{"lot_no": m.lot_no, "kind": m.kind} for m in master.abf_lots + master.core_lots],
+        [{"lot_no": m.lot_no, "kind": m.kind} for lots in master.materials.values() for m in lots],
+        ["lot_no", "kind"],
     )
     dump("operators.csv", [{"code": o} for o in master.operators])
     dump(
@@ -476,8 +493,8 @@ def write_truth(cfg: Config, master: MasterData, res: SimResult, out: Path) -> N
                 "lot_no": lot.lot_no,
                 "part_no": lot.part_no,
                 "panel_count": len(lot.panels),
-                "abf_lot": lot.abf_lot,
-                "core_lot": lot.core_lot,
+                "abf_lot": lot.materials["ABF"].lot_no if "ABF" in lot.materials else "",
+                "core_lot": lot.materials["CORE"].lot_no if "CORE" in lot.materials else "",
                 "release": lot.release,
                 "parent": lot.parent or "",
                 "qtime_hours": "" if lot.qtime_hours is None else lot.qtime_hours,
@@ -486,7 +503,11 @@ def write_truth(cfg: Config, master: MasterData, res: SimResult, out: Path) -> N
         ],
     )
     dump("lot_moves.csv", [asdict(m) for m in res.moves])
-    dump("lot_links.csv", [asdict(link) for link in res.links])
+    dump("lot_links.csv", [asdict(link) for link in res.links], ["parent", "child", "relation"])
+    if "kinds" in cfg.materials or "from_station" in cfg.events["qtime_over"]:
+        route = cfg.qtime_route()
+        rules = [{"from_station_code": route[0], "to_station_code": route[1], "limit_hours": cfg.scenario["qtime_limit_hours"]}] if route else []
+        dump("qtime_rules.csv", rules, ["from_station_code", "to_station_code", "limit_hours"])
     dump("records.csv", [asdict(r) for r in res.records])
     (out / "events.answers.json").write_text(
         json.dumps(res.events, ensure_ascii=False, indent=2), encoding="utf-8"

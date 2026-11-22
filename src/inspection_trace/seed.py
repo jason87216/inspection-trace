@@ -249,10 +249,23 @@ def read_seed_tables(root: Path) -> tuple[SeedTable, ...]:
             },
         ),
     )
+    keys = ("from_station_code", "to_station_code")
+    if (root / "qtime_rules.csv").is_file():
+        rules = _table(
+            root,
+            QTimeRule,
+            keys,
+            {
+                "qtime_rules.csv": {
+                    **{key: key for key in keys},
+                    "limit_hours": ("limit_hours", _finite_float),
+                }
+            },
+        )
+        return (*tables, rules)
     start, end = DEFAULT_QTIME_STATIONS
     if (start,) not in stations.rows or (end,) not in stations.rows:
         return tables
-    keys = ("from_station_code", "to_station_code")
     return (
         *tables,
         SeedTable(

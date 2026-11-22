@@ -103,7 +103,7 @@ class Dirtier:
                 continue
             self._one_cell_op(doc, row, weights, injections, dup_targets)
 
-        if not injections and not dup_targets and data_rows:
+        if "kinds" not in self.cfg.materials and not injections and not dup_targets and data_rows:
             # a dirty file must actually be dirty
             for _ in range(10):
                 row = self.rng.choice(data_rows)
@@ -131,7 +131,9 @@ class Dirtier:
     ) -> None:
         if row.dirtied:
             return
-        ops = list(weights)
+        ops = [name for name, weight in weights.items() if weight > 0]
+        if not ops:
+            return
         op = self.rng.choices(ops, weights=[weights[o] for o in ops])[0]
         if op == "D_DUP_ROW":
             row.dirtied = True

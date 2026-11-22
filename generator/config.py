@@ -38,6 +38,8 @@ class Item:
     sd: float = 0.0
     mean: float = 0.0
     decimals: int = 0
+    simulation_mean: float | None = None
+    sample_panels: int | None = None
 
 
 @dataclass(frozen=True)
@@ -51,7 +53,7 @@ class Part:
 class Config:
     scenario: dict[str, Any]
     scale: dict[str, int]
-    materials: dict[str, int]
+    materials: dict[str, Any]
     parts: list[Part]
     stations: list[Station]
     items: list[Item]
@@ -67,6 +69,19 @@ class Config:
     def item(self, code: str) -> Item:
         return next(i for i in self.items if i.code == code)
 
+    def material_rates(self) -> dict[str, int]:
+        if "kinds" in self.materials:
+            return {entry["code"]: entry["lots_per_material"] for entry in self.materials["kinds"]}
+        return {"ABF": self.materials["abf_lots_per_material"], "CORE": self.materials["core_lots_per_material"]}
+
+    def qtime_route(self) -> tuple[str, str] | None:
+        event = self.events["qtime_over"]
+        start, end = event.get("from_station", "B20"), event.get("to_station", "B60")
+        station_codes = {station.code for station in self.stations}
+        if event.get("enabled", True) and {start, end} <= station_codes:
+            return start, end
+        return None
+
 
 def load_config(
     scenario_path: Path | None = None, dirty_path: Path | None = None
@@ -75,7 +90,10 @@ def load_config(
     dirty_path = dirty_path or CONFIG_DIR / "dirty.toml"
     raw = tomllib.loads(scenario_path.read_text(encoding="utf-8"))
     dirty = tomllib.loads(dirty_path.read_text(encoding="utf-8"))
+    return build_config(raw, dirty)
 
+
+def build_config(raw: dict[str, Any], dirty: dict[str, Any]) -> Config:
     stations = [
         Station(
             code=s["code"],
@@ -102,6 +120,8 @@ def load_config(
             sd=i.get("sd", 0.0),
             mean=i.get("mean", 0.0),
             decimals=i.get("decimals", 0),
+            simulation_mean=i.get("simulation_mean"),
+            sample_panels=i.get("sample_panels"),
         )
         for i in raw["items"]
     ]

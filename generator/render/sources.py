@@ -265,7 +265,7 @@ def render_legacy(cfg: Config, station: str, recs: list[Record]) -> list[DocFile
                     "machine": r.machine,
                     "item": r.item,
                     "value": fmt_number(r.value, item.decimals),
-                    "unit": "UM",
+                    "unit": "UM" if item.unit == "μm" else item.unit,
                     "date": roc_date(r.measured_at),
                     "clock": r.measured_at.strftime("%H%M%S"),
                     "operator": r.operator,

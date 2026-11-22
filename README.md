@@ -12,6 +12,7 @@ Inspection Trace 將分散的製程檢驗報表轉成可查詢的量測紀錄，
 | 批號追溯與 Q-time | 追查上游原料、下游生產批及分批關係。依進出站紀錄計算兩站間的等待時間 |
 | 統計製程管制 | 依檢驗項目與機台顯示個別值及移動全距，標記超出管制界線或連續同側的訊號 |
 | MCP 查詢 | AI 客戶端可透過本機連線查批號、等待時間、量測、管制訊號、分組統計與匯入錯誤 |
+| 模擬情境（P11） | 透過網頁調整製程、量測和事件，驗證後產生可下載的模擬資料集 |
 | 匯入評估 | 使用模擬資料的答案清單驗證檔案判定、錯誤偵測與自動修正 |
 
 技術堆疊為 Python 3.12、FastAPI、SQLAlchemy、Alembic、PostgreSQL 17、openpyxl，以及原生 HTML、CSS 和 JavaScript。測試與品質檢查使用 pytest、Ruff 和 GitHub Actions。
@@ -128,6 +129,21 @@ uv run python -m scripts.evaluate_investigation --base-url http://127.0.0.1:8080
 規則基線命中 Q-time 超時。Qwen3-8B 在原料突變案例辨認出事件類型，但把生產批號填成原料批號。四案各只代表一種情境，這組分數用來揭露輸出與引用問題。可用 `--events` 指向另一份事件答案檔，並在資料庫載入相對應的模擬報表。
 
 若使用遠端 HTTPS 模型，需明確帶上 `--allow-remote-model`，並將憑證放入 `INSPECTION_MODEL_API_KEY` 環境變數。評估僅使用模擬資料。 [工具呼叫格式](https://platform.openai.com/docs/guides/function-calling)
+
+## 建立自訂模擬情境（P11）
+
+1. 執行 `docker compose up -d --build`，在工作頁選「模擬情境」。
+2. 開啟「ABF 載板製程」並點「複製為自訂情境」。改預設名稱、機台數量或每片量測點數。站點可新增、移除及調整順序。
+3. 選規模並按「預覽與驗證」。畫面會顯示阻擋錯誤、警告、原始批數、預估量測筆數及報表格式。
+4. 按「儲存預設」，重新預覽後勾選確認。按「產生資料集」並下載 ZIP。
+
+ZIP 包含 `truth/`、`files/`、`manifest.csv`、`summary.json`、情境快照和答案清單。相同設定、規模與亂數種子可重現量測和事件，ZIP 及 XLSX 的檔案時間可能不同。每次產生使用獨立目錄。
+
+可匯出 JSON 設定檔，或把 JSON、現有情境 TOML 和選填的髒資料 TOML 載入為草稿。移除自訂預設會保留已產生的資料集及封存的設定。「載入內建 ABF」可回到原始預設。
+
+Docker 使用 `scenarios` 資料卷，直接執行 API 時預設使用 `out/scenarios/`，也可設定 `INSPECTION_SCENARIO_ROOT`。產生只寫入情境儲存區。若要用新資料驗證匯入、批號追溯與管制圖，可用 `uv run python -m inspection_trace.seed --truth-dir <解壓後的 truth 目錄> --check` 預覽，再執行同一指令去掉 `--check` 並確認，最後上傳 `files/` 的報表。不同情境若重用相同主資料代碼，請使用各自的驗收資料庫。
+
+每個站點可選一種既有報表來源。機台 CSV 支援計數項目，其餘三種支援連續量測。連續量測的點數由情境統一指定，計數項目每片一筆。異常沿用原有六種事件，無檢驗項目的站點仍會產生進出站紀錄。 [情境資料與限制](docs/DESIGN.md#12-模擬情境管理p11)
 
 ## 文件與範圍
 

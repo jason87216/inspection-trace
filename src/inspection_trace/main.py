@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from inspection_trace.api import health, imports, lots, records, spc
+from inspection_trace.api import health, imports, lots, records, scenarios, spc
 from inspection_trace.services.errors import QueryError
 
 app = FastAPI(title="Inspection Trace")
@@ -15,6 +15,7 @@ app.include_router(imports.router)
 app.include_router(records.router)
 app.include_router(lots.router)
 app.include_router(spc.router)
+app.include_router(scenarios.router)
 app.mount(
     "/ui", StaticFiles(directory=Path(__file__).parent / "web" / "static", html=True), name="ui"
 )

@@ -1,6 +1,8 @@
+import { configureScenarios } from "./scenarios.js?v=p11";
+
 const query = new URLSearchParams(window.location.search);
 const requestedTab = query.get("tab");
-const tab = ["upload", "history", "records", "trace", "spc"].includes(requestedTab) ? requestedTab : "upload";
+const tab = ["upload", "history", "records", "trace", "spc", "scenarios"].includes(requestedTab) ? requestedTab : "upload";
 const labels = {
   ACCEPT: ["已入庫", ""],
   REJECT: ["拒絕入庫", "reject"],
@@ -564,6 +566,7 @@ if (tab === "upload") configureUpload();
 if (tab === "history") configureHistory();
 if (tab === "records") configureRecords();
 if (tab === "spc") configureSpc();
+if (tab === "scenarios") configureScenarios();
 if (tab === "trace") {
   configureTrace();
   configurePeriodQTime();

@@ -154,7 +154,6 @@ def validate_row(
     if (
         machine is None
         or machine.station_code not in master.active_stations
-        or (sheet.source_type == SRC_LEGACY and machine.station_code != "C40")
         or measured_at < machine.valid_from
         or (machine.valid_to is not None and measured_at >= machine.valid_to)
     ):
@@ -170,8 +169,13 @@ def validate_row(
     except ValueError:
         return row.issue("unit", E_UNIT_UNKNOWN, "單位與檢驗項目不相容")
 
-    operator = texts.get("operator") or master.move_operators.get((lot_no, station))
-    if operator is None or operator not in master.operators:
+    station_operator = master.move_operators.get((lot_no, station))
+    operator = texts.get("operator") or station_operator
+    if (
+        operator is None
+        or not _OPERATOR.fullmatch(operator)
+        or (operator not in master.operators and operator != station_operator)
+    ):
         field = "operator" if "operator" in texts else "lot_no"
         return row.issue(field, E_REF_NOT_FOUND, "操作員不在名單中或該批沒有進出站紀錄")
 
