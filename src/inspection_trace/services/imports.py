@@ -18,6 +18,7 @@ class ImportSummary(BaseModel):
     id: int
     file_name: str
     source_type: str
+    template_id: int | None
     station_code: str | None
     status: str
     total_rows: int

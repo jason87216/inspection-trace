@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>Inspection Trace｜檢驗紀錄</title>
-  <link rel="stylesheet" href="/ui/style.css?v=p11">
-  <script type="module" src="/ui/app.js?v=p11"></script>
+  <link rel="stylesheet" href="/ui/style.css?v=p9p10">
+  <script type="module" src="/ui/app.js?v=p9p10"></script>
 </head>
 <body>
   <header class="topbar">
@@ -14,6 +14,7 @@
       <a class="brand" href="/ui/">Inspection Trace</a>
       <nav class="nav" aria-label="主選單">
         <a href="/ui/?tab=upload" data-tab="upload">上傳匯入</a>
+        <a href="/ui/?tab=templates" data-tab="templates">匯入範本</a>
         <a href="/ui/?tab=history" data-tab="history">匯入歷史</a>
         <a href="/ui/?tab=records" data-tab="records">檢驗紀錄</a>
         <a href="/ui/?tab=trace" data-tab="trace">批號追溯</a>
@@ -24,17 +25,56 @@
   </header>
   <main>
     <section id="upload-page" class="page" hidden aria-labelledby="upload-title">
-      <div><h1 id="upload-title">上傳檢驗檔案</h1><p class="lead">支援舊系統與機台 CSV、站點日報與人工表單 Excel。單檔上限 5 MB。</p></div>
+      <div><h1 id="upload-title">上傳檢驗檔案</h1><p class="lead">支援 CSV、Excel 和固定版面化驗 PDF。單檔上限 5 MB。</p></div>
       <form id="upload-form" class="card">
         <div class="dropzone" id="dropzone">
           <label for="files">選擇檢驗檔案</label>
           <p class="note">可選多個檔案，或將檔案拖到這裡。</p>
-          <input type="file" accept=".csv,.xlsx" id="files" multiple required>
+          <input type="file" accept=".csv,.xlsx,.pdf" id="files" multiple required>
+          <label class="field">使用範本
+            <select id="upload-template"><option value="">自動辨識</option></select>
+          </label>
           <button type="submit" class="btn primary">開始匯入</button>
         </div>
       </form>
       <p id="upload-status" class="feedback" role="status"></p>
       <div id="upload-results" class="stack"></div>
+    </section>
+
+    <section id="templates-page" class="page" hidden aria-labelledby="templates-title">
+      <div><h1 id="templates-title">匯入範本</h1><p class="lead">為新 CSV 或 Excel 的表頭建立對應。核准後，可在匯入時選用。</p></div>
+      <div class="card stack">
+        <div class="toolbar">
+          <label class="field">既有範本<select id="template-select"></select></label>
+          <button id="template-new" type="button" class="btn">新增草稿</button>
+        </div>
+        <form id="template-preview" class="toolbar">
+          <label class="field">參考報表<input name="file" type="file" accept=".csv,.xlsx" required></label>
+          <label class="field">表頭所在列<input name="header_row" type="number" value="1" min="1" max="30" required></label>
+          <button type="submit" class="btn">預覽表頭</button>
+          <button id="template-suggest" type="button" class="btn" disabled>本機 AI 建議</button>
+        </form>
+        <p id="template-headers-summary" class="note"></p>
+      </div>
+      <form id="template-editor" class="card stack" hidden>
+        <div class="filters">
+          <label class="field">範本名稱<input name="name" maxlength="100" required></label>
+          <label class="field">日期格式<select name="date_format">
+            <option value="auto">自動辨識</option><option value="dmy">日/月/年 時:分:秒</option>
+            <option value="mdy">月/日/年 時:分:秒</option><option value="epoch">Unix 秒數</option>
+          </select></label>
+          <label class="field">預設單位（選填）<input name="default_unit" maxlength="10"></label>
+        </div>
+        <h2>來源表頭對應</h2>
+        <div id="template-fields" class="filters"></div>
+        <div class="toolbar"><button type="submit" class="btn primary">儲存草稿</button></div>
+      </form>
+      <form id="template-approval" class="card toolbar" hidden>
+        <label class="field">核准者<input name="approved_by" maxlength="50" required></label>
+        <label class="check"><input type="checkbox" required> 確認已核對欄位、日期及單位</label>
+        <button type="submit" class="btn primary">核准範本</button>
+      </form>
+      <p id="template-notice" class="feedback" role="status"></p>
     </section>
 
     <section id="history-page" class="page" hidden aria-labelledby="history-title">

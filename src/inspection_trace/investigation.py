@@ -22,6 +22,8 @@ class Case:
     lot_no: str
     cause: str
     entity: str
+    item_codes: tuple[str, ...] = ()
+    shift_direction: int = 0
 
 
 class Finding(BaseModel):
@@ -61,42 +63,99 @@ def select_cases(events: Iterable[dict[str, object]], per_type: int) -> list[Cas
             lot = lots[0] if label == "EV_MAT_SHIFT" else lots[-1]
         entity = event.get(entity_key)
         if isinstance(lot, str) and isinstance(entity, str):
-            cases.append(Case(lot, label, entity))
+            items = event.get("items", event.get("item")) if label != "EV_QTIME_OVER" else None
+            if isinstance(items, str):
+                items = [items]
+            item_codes = (
+                tuple(item for item in items if isinstance(item, str))
+                if isinstance(items, list)
+                else ()
+            )
+            delta = event.get("rate_per_lot" if label == "EV_DRIFT" else "delta")
+            direction = int(delta > 0) - int(delta < 0) if isinstance(delta, (int, float)) else 0
+            cases.append(Case(lot, label, entity, item_codes, direction))
             used[label] += 1
     return cases
 
 
-def _objects(value: object) -> Iterable[dict[str, object]]:
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _objects(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _objects(child)
+def _rows(result: dict[str, object], key: str) -> Iterable[dict[str, object]]:
+    rows = result.get(key)
+    if isinstance(rows, list):
+        yield from (row for row in rows if isinstance(row, dict))
 
 
-def _supports(cause: str, entity: str | None, evidence: Evidence) -> bool:
-    if entity is None:
+def _linked_material(lot_no: str, material: str, trace: dict[str, object]) -> bool:
+    if trace.get("lot_no") != lot_no or trace.get("direction") != "up":
         return False
-    for row in _objects(evidence.result):
-        if cause == "EV_QTIME_OVER":
-            if row.get("lot_no") == entity and row.get("status") == "over_limit":
+    links = list(_rows(trace, "links"))
+    split_ancestors = {lot_no}
+    # The trace service returns links in increasing depth order.
+    for link in links:
+        parent = link.get("parent_lot_no")
+        if (
+            isinstance(parent, str)
+            and link.get("relation") == "split"
+            and link.get("child_lot_no") in split_ancestors
+        ):
+            split_ancestors.add(parent)
+    return any(
+        link.get("relation") == "consume"
+        and link.get("parent_lot_no") == material
+        and link.get("child_lot_no") in split_ancestors
+        for link in links
+    )
+
+
+def _signal_lots(case: Case, chart: dict[str, object], signal: str) -> set[str]:
+    lots: set[str] = set()
+    limits = chart.get("individual_limits")
+    center = limits.get("center") if isinstance(limits, dict) else None
+    for point in _rows(chart, "signals"):
+        lot, value, signals = point.get("lot_no"), point.get("value"), point.get("signals")
+        if not (isinstance(lot, str) and isinstance(signals, list) and signal in signals):
+            continue
+        if signal.startswith("I_") and case.shift_direction:
+            if not isinstance(center, (int, float)) or not isinstance(value, (int, float)):
+                continue
+            if (value - center) * case.shift_direction <= 0:
+                continue
+        lots.add(lot)
+    return lots
+
+
+def _supports(case: Case, finding: Finding, evidence: list[Evidence]) -> bool:
+    entity = finding.entity
+    if entity is None or finding.cause == "UNKNOWN":
+        return False
+    if finding.cause == "EV_QTIME_OVER":
+        return entity == case.lot_no and any(
+            row.get("lot_no") == entity and row.get("status") == "over_limit"
+            for item in evidence
+            if item.tool in {"get_lot_history", "check_qtime"}
+            for row in _rows(item.result, "qtime" if item.tool == "get_lot_history" else "items")
+        )
+    if finding.cause == "EV_MAT_SHIFT" and not any(
+        item.tool == "trace_lot" and _linked_material(case.lot_no, entity, item.result)
+        for item in evidence
+    ):
+        return False
+
+    for item in evidence:
+        chart = item.result
+        if item.tool != "spc_status" or chart.get("item_code") not in case.item_codes:
+            continue
+        if finding.cause != "EV_MAT_SHIFT" and chart.get("machine_code") != entity:
+            continue
+        if finding.cause == "EV_BATH_AGING":
+            lots = _signal_lots(case, chart, "MR_OUTSIDE_LIMIT")
+            if case.lot_no in lots and len(lots) > 1:
                 return True
-        if cause == "EV_MAT_SHIFT":
-            if (
-                row.get("parent_lot_no") == entity
-                and row.get("relation") == "consume"
-                or row.get("group") == entity
-                and row.get("evidence_record_id") is not None
-            ):
-                return True
-        if cause in {"EV_DRIFT", "EV_BATH_AGING"}:
-            if row.get("machine_code") == entity and (
-                row.get("signal_count", 0) != 0 or row.get("value") is not None
-            ):
-                return True
-            if row.get("group") == entity and row.get("evidence_record_id") is not None:
+            continue
+        if case.lot_no in _signal_lots(case, chart, "I_EIGHT_SAME_SIDE"):
+            return True
+        if finding.cause == "EV_DRIFT":
+            lots = _signal_lots(case, chart, "I_OUTSIDE_3SIGMA")
+            if case.lot_no in lots and len(lots) > 1:
                 return True
     return False
 
@@ -105,11 +164,7 @@ def score(case: Case, finding: Finding, evidence: dict[str, Evidence]) -> Score:
     cited = set(finding.evidence_ids)
     missing = cited - evidence.keys()
     references = [evidence[key] for key in cited if key in evidence]
-    supported = (
-        bool(references)
-        and not missing
-        and any(_supports(finding.cause, finding.entity, item) for item in references)
-    )
+    supported = bool(references) and not missing and _supports(case, finding, references)
     root_hit = (finding.cause, finding.entity) == (case.cause, case.entity)
     return Score(
         root_hit=root_hit,

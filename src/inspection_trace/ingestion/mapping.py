@@ -6,17 +6,15 @@ from pathlib import PurePath
 from re import fullmatch
 
 from inspection_trace.ingestion.errors import (
-    E_FILE_ENCODING,
     E_FILE_FORMAT,
     E_HEADER_CONFLICT,
     E_HEADER_UNKNOWN,
 )
 from inspection_trace.ingestion.readers import (
-    CsvReadError,
     CsvRow,
     ExcelRow,
     FileReadError,
-    read_csv,
+    read_csv_compatible,
     read_excel,
 )
 
@@ -97,6 +95,8 @@ class ImportSheet:
     positions: dict[str, int]
     points: tuple[str, ...]
     unused_columns: tuple[UnusedColumn, ...]
+    date_format: str = "auto"
+    default_unit: str | None = None
 
 
 def map_c40_headers(headers: Sequence[str]) -> dict[str, int]:
@@ -150,12 +150,7 @@ def map_import_file(file_name: str, data: bytes) -> ImportSheet:
     """Detect a supported source from its actual headers and retain original coordinates."""
     extension = PurePath(file_name).suffix.lower()
     if extension == ".csv":
-        try:
-            document = read_csv(data)
-        except CsvReadError as exc:
-            if exc.code != E_FILE_ENCODING:
-                raise
-            document = read_csv(data, encoding="cp950")
+        document = read_csv_compatible(data)
         headers = document.header.cells
         if _header_score(headers, _C40_ALIASES) > _header_score(headers, _MACHINE_ALIASES):
             source, report = SRC_LEGACY, inspect_c40_headers(headers)

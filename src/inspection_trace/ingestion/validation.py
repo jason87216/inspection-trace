@@ -16,7 +16,14 @@ from inspection_trace.ingestion.errors import (
     E_REQUIRED_MISSING,
     E_UNIT_UNKNOWN,
 )
-from inspection_trace.ingestion.mapping import SRC_LEGACY, SRC_MACHINE, ImportSheet, InputRow
+from inspection_trace.ingestion.mapping import (
+    SRC_LEGACY,
+    SRC_MACHINE,
+    SRC_MANUAL,
+    SRC_STATION,
+    ImportSheet,
+    InputRow,
+)
 from inspection_trace.ingestion.normalization import (
     TAIPEI,
     clean_text,
@@ -130,9 +137,19 @@ def validate_row(
             try:
                 if sheet.source_type == SRC_LEGACY:
                     parsed[field] = parse_roc_day(value) if field == "date" else parse_clock(value)
+                elif sheet.date_format in {"dmy", "mdy"} and not isinstance(
+                    row.raw(field), datetime
+                ):
+                    pattern = "%d/%m/%Y" if sheet.date_format == "dmy" else "%m/%d/%Y"
+                    parsed[field] = datetime.strptime(value, pattern + " %H:%M:%S").replace(
+                        tzinfo=TAIPEI
+                    )
                 else:
+                    if sheet.date_format == "epoch" and not re.fullmatch(r"[0-9]{9,11}", value):
+                        raise ValueError("Expected Unix seconds.")
                     parsed[field] = parse_timestamp(
-                        row.raw(field), machine=sheet.source_type == SRC_MACHINE
+                        row.raw(field),
+                        machine=sheet.source_type == SRC_MACHINE or sheet.date_format == "epoch",
                     )
             except (ValueError, OverflowError):
                 return row.issue(field, E_DATE_INVALID, "日期或時間格式錯誤")
@@ -160,14 +177,29 @@ def validate_row(
         return row.issue("machine_code", E_REF_NOT_FOUND, "機台不存在、站點不符或量測時未啟用")
 
     station = machine.station_code
-    item_name = texts["item_code"]
-    item = master.items.get(item_name) or master.items_by_name.get((station, item_name))
-    if item is None or not item.active or item.station_code != station:
+    item_label = texts["item_code"]
+    by_code = master.items.get(item_label)
+    if by_code is not None and by_code.station_code != station:
+        by_code = None
+    by_name = master.items_by_name.get((station, item_label))
+    if sheet.source_type in {SRC_STATION, SRC_MANUAL}:
+        item = by_name or by_code
+    else:
+        item = by_code or by_name
+    if item is None or not item.active:
         return row.issue("item_code", E_REF_NOT_FOUND, "檢驗項目不存在、已停用或站點不符")
+    unit = texts.get("unit", sheet.default_unit or item.unit)
     try:
-        multiplier = unit_multiplier(texts.get("unit", item.unit), item.unit)
+        multiplier = unit_multiplier(unit, item.unit)
     except ValueError:
-        return row.issue("unit", E_UNIT_UNKNOWN, "單位與檢驗項目不相容")
+        if "unit" in texts:
+            return row.issue("unit", E_UNIT_UNKNOWN, "單位與檢驗項目不相容")
+        return ImportIssue(
+            raw_row.line_no,
+            None,
+            E_UNIT_UNKNOWN,
+            f"範本預設單位 {unit!r} 與檢驗項目單位 {item.unit!r} 不相容",
+        )
 
     station_operator = master.move_operators.get((lot_no, station))
     operator = texts.get("operator") or station_operator

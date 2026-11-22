@@ -1,6 +1,6 @@
 """Browser-facing batch history, trace and Q-time acceptance cases."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from inspection_trace.models import Lot, LotLink, LotMove
+from inspection_trace.services.lots import period_qtime
 
 pytestmark = pytest.mark.integration
 SAMPLE_LOT = "L261102A001"
@@ -101,3 +102,141 @@ def test_split_lot_preserves_provenance_of_inherited_qtime(
         SAMPLE_LOT,
         SAMPLE_LOT,
     )
+    arrived_at = datetime.fromisoformat(check["to_start"])
+    params = {"from": arrived_at.isoformat(), "to": (arrived_at + timedelta(seconds=1)).isoformat()}
+    items = client.get("/qtime", params=params).json()["items"]
+    assert [row["lot_no"] for row in items] == [SAMPLE_LOT]
+
+
+def test_period_qtime_counts_each_distinct_child_arrival(
+    client: TestClient, seeded_session: Session
+) -> None:
+    parent, first, second, grandchild, within = (
+        "L300102Z001",
+        "L300102Z001-S1",
+        "L300102Z001-S2",
+        "L300102Z001-S1-A",
+        "L300102Z001-S3",
+    )
+    arrival = datetime(2030, 1, 2, 12, tzinfo=UTC)
+    with seeded_session.begin():
+        seeded_session.add_all(
+            Lot(
+                lot_no=lot_no,
+                lot_type="production",
+                part_no="PN-ABF-1001",
+                panel_count=5,
+                released_at=arrival - timedelta(days=1),
+            )
+            for lot_no in (parent, first, second, grandchild, within)
+        )
+        seeded_session.flush()
+        seeded_session.add_all(
+            LotLink(parent_lot_no=source, child_lot_no=child, relation="split")
+            for source, child in ((parent, first), (parent, second), (first, grandchild))
+        )
+        b20, b60 = seeded_session.scalars(
+            select(LotMove)
+            .where(LotMove.lot_no == SAMPLE_LOT, LotMove.station_code.in_(["B20", "B60"]))
+            .order_by(LotMove.station_code)
+        ).all()
+        departure = arrival - timedelta(hours=9)
+        seeded_session.add_all(
+            LotMove(
+                lot_no=lot_no,
+                station_code=sample.station_code,
+                machine_code=sample.machine_code,
+                start_at=start_at,
+                end_at=start_at + timedelta(hours=1),
+                operator=sample.operator,
+            )
+            for lot_no, sample, start_at in (
+                (parent, b20, departure - timedelta(hours=1)),
+                (first, b60, arrival),
+                (second, b60, arrival),
+                (within, b20, arrival - timedelta(hours=2)),
+                (within, b60, arrival + timedelta(hours=1)),
+            )
+        )
+
+    first_check = client.get(f"/lots/{first}").json()["qtime"][0]
+    second_check = client.get(f"/lots/{second}").json()["qtime"][0]
+    assert (first_check["from_lot_no"], first_check["to_lot_no"], first_check["hours"]) == (
+        parent,
+        first,
+        9.0,
+    )
+    assert first_check["status"] == "over_limit"
+    assert client.get(f"/lots/{grandchild}").json()["qtime"][0] == {
+        **first_check,
+        "lot_no": grandchild,
+    }
+
+    end = arrival + timedelta(hours=2)
+    params = {"from": arrival.isoformat(), "to": end.isoformat()}
+    items = client.get("/qtime", params=params).json()["items"]
+    assert [row["lot_no"] for row in items] == [within, first, second]
+    assert items[1:] == [first_check, second_check]
+    only_over = client.get("/qtime", params={**params, "over_only": True}).json()["items"]
+    assert only_over == [first_check, second_check]
+    limited = period_qtime(seeded_session, arrival, end, over_only=True, limit=1)
+    assert [row.lot_no for row in limited.items] == [first]
+
+    before = client.get("/qtime", params={"from": departure.isoformat(), "to": params["from"]})
+    assert [(row["lot_no"], row["status"]) for row in before.json()["items"]] == [
+        (parent, "incomplete")
+    ]
+
+
+def test_qtime_uses_only_the_unique_nearest_split_movement(
+    client: TestClient, seeded_session: Session
+) -> None:
+    other_parent, bridge, child = "L261102B002", "L300103Z001", "L300103Z001-S1"
+    arrival = datetime(2030, 1, 3, 12, tzinfo=UTC)
+    with seeded_session.begin():
+        seeded_session.add_all(
+            Lot(
+                lot_no=lot_no,
+                lot_type="production",
+                part_no="PN-ABF-1001",
+                panel_count=5,
+                released_at=arrival - timedelta(days=1),
+            )
+            for lot_no in (bridge, child)
+        )
+        seeded_session.flush()
+        seeded_session.add_all(
+            LotLink(parent_lot_no=source, child_lot_no=target, relation="split")
+            for source, target in ((SAMPLE_LOT, child), (other_parent, bridge), (bridge, child))
+        )
+        sample = seeded_session.scalars(
+            select(LotMove).where(LotMove.lot_no == SAMPLE_LOT, LotMove.station_code == "B60")
+        ).one()
+        seeded_session.add(
+            LotMove(
+                lot_no=child,
+                station_code=sample.station_code,
+                machine_code=sample.machine_code,
+                start_at=arrival,
+                end_at=arrival + timedelta(hours=1),
+                operator=sample.operator,
+            )
+        )
+
+    params = {"from": arrival.isoformat(), "to": (arrival + timedelta(hours=1)).isoformat()}
+    nearest = client.get(f"/lots/{child}").json()["qtime"][0]
+    assert (nearest["from_lot_no"], nearest["status"]) == (SAMPLE_LOT, "over_limit")
+    assert client.get("/qtime", params=params).json()["items"] == [nearest]
+
+    with seeded_session.begin():
+        seeded_session.add(
+            LotLink(parent_lot_no=other_parent, child_lot_no=child, relation="split")
+        )
+
+    ambiguous = client.get(f"/lots/{child}").json()["qtime"][0]
+    assert (ambiguous["from_lot_no"], ambiguous["status"], ambiguous["hours"]) == (
+        None,
+        "incomplete",
+        None,
+    )
+    assert client.get("/qtime", params=params).json()["items"] == [ambiguous]

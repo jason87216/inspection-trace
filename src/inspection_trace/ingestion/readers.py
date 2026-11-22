@@ -81,6 +81,15 @@ def read_csv(data: bytes, *, encoding: Literal["cp950", "utf-8-sig"] = "utf-8-si
     return CsvDocument(rows[0], tuple(rows[1:]))
 
 
+def read_csv_compatible(data: bytes) -> CsvDocument:
+    try:
+        return read_csv(data)
+    except CsvReadError as exc:
+        if exc.code != E_FILE_ENCODING:
+            raise
+        return read_csv(data, encoding="cp950")
+
+
 def read_excel(data: bytes) -> tuple[ExcelRow, ...]:
     """Read the active sheet of a bounded, plain XLSX workbook."""
     try:

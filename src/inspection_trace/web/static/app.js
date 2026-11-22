@@ -1,8 +1,9 @@
 import { configureScenarios } from "./scenarios.js?v=p11";
+import { configureTemplates } from "./templates.js?v=p9p10";
 
 const query = new URLSearchParams(window.location.search);
 const requestedTab = query.get("tab");
-const tab = ["upload", "history", "records", "trace", "spc", "scenarios"].includes(requestedTab) ? requestedTab : "upload";
+const tab = ["upload", "templates", "history", "records", "trace", "spc", "scenarios"].includes(requestedTab) ? requestedTab : "upload";
 const labels = {
   ACCEPT: ["已入庫", ""],
   REJECT: ["拒絕入庫", "reject"],
@@ -10,7 +11,8 @@ const labels = {
 };
 const sources = {
   SRC_LEGACY: "舊系統 CSV", SRC_MACHINE: "機台 CSV",
-  SRC_STATION: "站點日報", SRC_MANUAL: "人工表單", UNKNOWN: "未辨識",
+  SRC_STATION: "站點日報", SRC_MANUAL: "人工表單", SRC_TEMPLATE: "自訂範本",
+  SRC_PDF: "化驗 PDF", UNKNOWN: "未辨識",
 };
 const taipeiTime = new Intl.DateTimeFormat("zh-TW", {
   timeZone: "Asia/Taipei", dateStyle: "short", timeStyle: "medium", hourCycle: "h23",
@@ -71,7 +73,7 @@ async function getJson(url, options) {
   if (response.ok) return response.json();
   const result = await response.json().catch(() => null);
   const detail = result?.detail;
-  const message = typeof detail === "string" ? detail : detail?.[0]?.msg;
+  const message = typeof detail === "string" ? detail : detail?.message ?? detail?.[0]?.msg;
   throw new Error(message ?? "請求失敗，請稍後再試。");
 }
 
@@ -132,6 +134,14 @@ function configureUpload() {
   const submit = form.querySelector("button");
   const status = document.getElementById("upload-status");
   const results = document.getElementById("upload-results");
+  const template = document.getElementById("upload-template");
+  getJson("/templates?status=approved").then((rows) => {
+    for (const row of rows) {
+      const option = element("option", row.name);
+      option.value = row.id;
+      template.append(option);
+    }
+  }).catch(() => indicate(status, "暫時無法載入匯入範本，可繼續使用自動辨識。", true));
 
   zone.addEventListener("dragover", (event) => {
     event.preventDefault();
@@ -147,6 +157,7 @@ function configureUpload() {
     event.preventDefault();
     if (submit.disabled) return;
     const files = Array.from(input.files);
+    const templateId = template.value;
     if (!files.length) return;
     submit.disabled = true;
     input.disabled = true;
@@ -155,7 +166,9 @@ function configureUpload() {
     for (const [index, file] of files.entries()) {
       indicate(status, `處理第 ${index + 1}／${files.length} 份檔案…`);
       try {
-        const batch = await getJson(`/imports?file_name=${encodeURIComponent(file.name)}`, {
+        const params = new URLSearchParams({file_name: file.name});
+        if (templateId) params.set("template_id", templateId);
+        const batch = await getJson(`/imports?${params}`, {
           method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file,
         });
         results.append(renderResult(batch));
@@ -563,6 +576,7 @@ function configureSpc() {
 document.getElementById(`${tab}-page`).hidden = false;
 document.querySelector(`[data-tab="${tab}"]`).setAttribute("aria-current", "page");
 if (tab === "upload") configureUpload();
+if (tab === "templates") configureTemplates(getJson, element, indicate);
 if (tab === "history") configureHistory();
 if (tab === "records") configureRecords();
 if (tab === "spc") configureSpc();

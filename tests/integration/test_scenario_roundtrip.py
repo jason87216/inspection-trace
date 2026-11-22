@@ -25,9 +25,15 @@ def test_custom_dataset_can_be_seeded_uploaded_traced_and_charted(
     raw["parts"] = [{"part_no": "PN-CUSTOM", "name": "測試件", "line": "Z"}]
     raw["stations"] = [
         dict(raw["stations"][3], code="X10", name="自訂檢驗", machine_prefix="CHK", machines=1),
-        dict(raw["stations"][0], code="X20", name="自訂出站", machine_prefix="END", machines=1),
+        dict(raw["stations"][5], code="X20", name="自訂出站", machine_prefix="END", machines=1),
+        dict(raw["stations"][4], code="X30", name="自訂機檢", machine_prefix="AOI", machines=1),
     ]
-    raw["items"] = [dict(raw["items"][0], code="WIDTH", station="X10", simulation_mean=48)]
+    raw["items"] = [
+        dict(raw["items"][0], code="ZWIDTH", station="X10", simulation_mean=48),
+        dict(raw["items"][0], code="ZHEIGHT", name="ZWIDTH", station="X20"),
+        dict(raw["items"][0], code="ZTHICK", name="ZHEIGHT", station="X20"),
+        dict(raw["items"][1], code="ZCOUNT", station="X30"),
+    ]
     raw["materials"] = {"kinds": [{"code": "FILM", "lots_per_material": 1}]}
     for event in raw["events"].values():
         event["enabled"] = False
@@ -49,7 +55,9 @@ def test_custom_dataset_can_be_seeded_uploaded_traced_and_charted(
     apply_seed(seeded_session, read_seed_tables(truth))
     with (truth / "records.csv").open(encoding="utf-8") as stream:
         assert any(int(row["operator"].split("-")[1]) > 12 for row in csv.DictReader(stream))
-    for path in (destination / "files").glob("*.csv"):
+    inserted_counts: dict[str, int] = {}
+    files = destination / "files"
+    for path in sorted([*files.glob("*.csv"), *files.glob("*.xlsx")]):
         response = client.post(
             "/imports",
             params={"file_name": path.name},
@@ -57,12 +65,16 @@ def test_custom_dataset_can_be_seeded_uploaded_traced_and_charted(
             content=path.read_bytes(),
         )
         assert response.status_code == 201, response.text
-        assert response.json()["status"] == "ACCEPT", response.text
+        result = response.json()
+        assert result["status"] == "ACCEPT", response.text
+        source = result["source_type"]
+        inserted_counts[source] = inserted_counts.get(source, 0) + result["inserted_count"]
+    assert inserted_counts == {"SRC_LEGACY": 12, "SRC_STATION": 24, "SRC_MACHINE": 40}
 
     trace = client.get("/lots/L300102Z001/trace").json()
     assert trace["links"][0]["parent_lot_no"].startswith("FILM-")
     detail = client.get("/lots/L300102Z001").json()
     assert detail["qtime"][0]["status"] == "over_limit"
-    chart = client.get("/spc/WIDTH", params={"machine": "CHK-01", "baseline_points": 5})
+    chart = client.get("/spc/ZWIDTH", params={"machine": "CHK-01", "baseline_points": 5})
     assert chart.status_code == 200
     assert len(chart.json()["points"]) == 12

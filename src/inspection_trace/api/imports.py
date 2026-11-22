@@ -1,17 +1,15 @@
 """Upload, history, and downloadable import errors."""
 
-from pathlib import PurePath
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from starlette.requests import ClientDisconnect
 
+from inspection_trace.api.upload import read_upload
 from inspection_trace.db import get_session
-from inspection_trace.ingestion.loader import import_file
-from inspection_trace.ingestion.readers import MAX_FILE_BYTES
+from inspection_trace.ingestion.loader import UnapprovedTemplate, import_file
 from inspection_trace.ingestion.report import REPORT_MEDIA_TYPE, build_error_report
 from inspection_trace.models import ImportBatch
 from inspection_trace.services import imports as queries
@@ -35,8 +33,13 @@ def get_import(batch_id: int, session: DbSession) -> queries.ImportDetail:
     return queries.get_import(batch_id, session)
 
 
-def _submit(session: Session, file_name: str, data: bytes) -> queries.ImportDetail:
-    batch_id = import_file(session, file_name, data)
+def _submit(
+    session: Session, file_name: str, data: bytes, template_id: int | None
+) -> queries.ImportDetail:
+    try:
+        batch_id = import_file(session, file_name, data, template_id=template_id)
+    except UnapprovedTemplate as exc:
+        raise HTTPException(409, str(exc)) from exc
     return queries.get_import(batch_id, session)
 
 
@@ -56,30 +59,13 @@ async def upload(
     request: Request,
     session: DbSession,
     file_name: Annotated[str, Query(min_length=1, max_length=200)],
+    template_id: Annotated[int | None, Query(ge=1, le=2147483647)] = None,
 ) -> queries.ImportDetail:
-    """Accept one raw CSV/XLSX payload and return the saved attempt."""
-    if (
-        request.headers.get("content-type", "").split(";", maxsplit=1)[0].strip().lower()
-        != "application/octet-stream"
-    ):
-        raise HTTPException(415, "請以 application/octet-stream 傳送檔案")
-    if (
-        any(character in file_name for character in "/\\:")
-        or any(ord(character) < 32 for character in file_name)
-        or PurePath(file_name).suffix.lower() not in {".csv", ".xlsx"}
-    ):
-        raise HTTPException(422, "請提供有效的 CSV 或 XLSX 檔名")
-    data = bytearray()
-    try:
-        async for chunk in request.stream():
-            if len(data) + len(chunk) > MAX_FILE_BYTES:
-                raise HTTPException(413, "單一檔案上限為 5 MB")
-            data.extend(chunk)
-    except ClientDisconnect as exc:
-        raise HTTPException(400, "檔案傳輸中斷") from exc
-    if not data:
-        raise HTTPException(422, "檔案是空的")
-    return await run_in_threadpool(_submit, session, file_name, bytes(data))
+    """Accept one raw CSV/XLSX/PDF payload and return the saved attempt."""
+    if template_id is not None and file_name.lower().endswith(".pdf"):
+        raise HTTPException(422, "固定版面 PDF 請使用自動辨識")
+    data = await read_upload(request, file_name, {".csv", ".xlsx", ".pdf"})
+    return await run_in_threadpool(_submit, session, file_name, data, template_id)
 
 
 @router.get("/{batch_id}/error-report")

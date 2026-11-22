@@ -5,7 +5,7 @@ from hashlib import sha256
 from itertools import batched
 from pathlib import Path
 
-from sqlalchemy import func, insert, select, text, tuple_
+from sqlalchemy import func, insert, or_, select, text, tuple_
 from sqlalchemy.orm import Session
 
 from inspection_trace.ingestion.errors import (
@@ -13,9 +13,11 @@ from inspection_trace.ingestion.errors import (
     E_FILE_FORMAT,
     E_MEASUREMENT_CONFLICT,
 )
+from inspection_trace.ingestion.lab_pdf import map_lab_pdf
 from inspection_trace.ingestion.mapping import HeaderMappingError, map_import_file
 from inspection_trace.ingestion.normalization import clean_text
 from inspection_trace.ingestion.readers import FileReadError
+from inspection_trace.ingestion.templates import TemplateRules, map_template_file
 from inspection_trace.ingestion.validation import (
     ImportIssue,
     MasterData,
@@ -26,6 +28,7 @@ from inspection_trace.ingestion.validation import (
 from inspection_trace.models import (
     ImportBatch,
     ImportErrorDetail,
+    ImportTemplate,
     InspectionItem,
     InspectionRecord,
     Lot,
@@ -110,24 +113,42 @@ def _db_text(value: str | None) -> str | None:
     return value.replace("\x00", "\\u0000") if value is not None else None
 
 
+class UnapprovedTemplate(ValueError):
+    """The requested upload rule does not exist or is still a draft."""
+
+
 def import_file(
-    session: Session, file_name: str, data: bytes, *, operators_path: Path = OPERATORS_PATH
+    session: Session,
+    file_name: str,
+    data: bytes,
+    *,
+    operators_path: Path = OPERATORS_PATH,
+    template_id: int | None = None,
 ) -> int:
     """Import one upload, preserving attempts and all-or-nothing measurements."""
     digest = sha256(data).hexdigest()
     with session.begin():
         # Serialize writers across all import entry points, including concurrent duplicate uploads.
         session.execute(text("LOCK TABLE import_batch IN SHARE ROW EXCLUSIVE MODE"))
+        template = session.get(ImportTemplate, template_id) if template_id is not None else None
+        if template_id is not None and (template is None or template.status != "approved"):
+            raise UnapprovedTemplate("只能使用已核准的匯入範本")
         original = session.scalar(
-            select(ImportBatch).where(
-                ImportBatch.file_sha256 == digest, ImportBatch.duplicate_of_id.is_(None)
+            select(ImportBatch)
+            .where(
+                ImportBatch.file_sha256 == digest,
+                ImportBatch.duplicate_of_id.is_(None),
+                or_(ImportBatch.status == ACCEPT, ImportBatch.template_id == template_id),
             )
+            .order_by((ImportBatch.status == ACCEPT).desc(), ImportBatch.id)
+            .limit(1)
         )
         if original is not None:
             attempt = ImportBatch(
                 file_name=file_name,
                 file_sha256=digest,
                 source_type=original.source_type,
+                template_id=original.template_id,
                 station_code=original.station_code,
                 status=DUPLICATE_FILE,
                 total_rows=original.total_rows,
@@ -146,7 +167,13 @@ def import_file(
         station = None
         warnings: list[str] = []
         try:
-            sheet = map_import_file(file_name, data)
+            if file_name.lower().endswith(".pdf") and template is None:
+                sheet = map_lab_pdf(data)
+            elif template is None:
+                sheet = map_import_file(file_name, data)
+            else:
+                rules = TemplateRules.model_validate(template, from_attributes=True)
+                sheet = map_template_file(file_name, data, rules)
         except (FileReadError, HeaderMappingError) as exc:
             issues.append(ImportIssue(None, None, exc.code, str(exc)))
         else:
@@ -200,6 +227,7 @@ def import_file(
             file_name=file_name,
             file_sha256=digest,
             source_type=source_type,
+            template_id=template_id,
             station_code=station,
             status=REJECT if issues else ACCEPT,
             total_rows=total_rows,

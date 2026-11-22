@@ -63,38 +63,22 @@ def build_answers(doc: DocFile, injections: list[Injection], is_dirty: bool) -> 
     }
 
 
-def _clear_previous_output(out: Path) -> None:
-    """Delete `out` only if it is empty or an earlier generator output (has summary.json).
-
-    Anything else is refused, so a wrong --out (e.g. "." or a source folder) never wipes it.
-    """
-    if not out.exists():
-        return
-    if not out.is_dir():
-        raise FileExistsError(f"--out {out} is a file, not a directory")
-    if any(out.iterdir()) and not (out / "summary.json").is_file():
-        raise FileExistsError(
-            f"--out {out} is not empty and has no summary.json; "
-            "refusing to delete it. Choose an empty or new directory."
-        )
-    shutil.rmtree(out)
-
-
 def run(cfg: Config, scale: str, seed: int, out: Path) -> dict[str, Any]:
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        raise FileExistsError(f"--out {out} is not empty. Choose an empty or new directory.")
+
     lot_count = cfg.scale[scale]
     sim_rng = random.Random(seed)
     master = build_master(cfg, lot_count, sim_rng)
     res = simulate(cfg, master, lot_count, sim_rng)
 
-    _clear_previous_output(out)
+    files_dir = out / "files"
+    files_dir.mkdir(parents=True)
     write_truth(cfg, master, res, out / "truth")
 
     # separate random stream: changing dirty settings never changes the truth
     dirty_rng = random.Random(seed + 1_000_003)
     dirtier = Dirtier(cfg, master.machines, dirty_rng)
-    files_dir = out / "files"
-    files_dir.mkdir(parents=True)
-
     manifest: list[dict[str, Any]] = []
     op_counter: Counter[str] = Counter()
     for doc in render_all(cfg, res):

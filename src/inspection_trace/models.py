@@ -185,6 +185,34 @@ class QTimeRule(Base):
     limit_hours: Mapped[float] = mapped_column(Double)
 
 
+class ImportTemplate(Base):
+    """An editable draft, or the immutable rules used for a past upload."""
+
+    __tablename__ = "import_template"
+    __table_args__ = (
+        CheckConstraint("status IN ('draft', 'approved')", name="status"),
+        CheckConstraint("header_row BETWEEN 1 AND 30", name="header_row"),
+        CheckConstraint("file_type IN ('csv', 'xlsx')", name="file_type"),
+        CheckConstraint(
+            "(status = 'draft' AND approved_by IS NULL AND approved_at IS NULL)"
+            " OR (status = 'approved' AND approved_by IS NOT NULL AND approved_at IS NOT NULL)",
+            name="approval",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Identity(), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    revision: Mapped[int] = mapped_column(default=1, server_default=text("1"))
+    file_type: Mapped[str] = mapped_column(String(4))
+    header_row: Mapped[int]
+    column_map: Mapped[dict[str, str]] = mapped_column(JSON)
+    date_format: Mapped[str] = mapped_column(String(12))
+    default_unit: Mapped[str | None] = mapped_column(String(10))
+    status: Mapped[str] = mapped_column(String(12))
+    approved_by: Mapped[str | None] = mapped_column(String(50))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ImportBatch(Base):
     """An upload attempt, including later uploads of already processed content."""
 
@@ -198,8 +226,10 @@ class ImportBatch(Base):
         Index(
             "uq_import_batch_file_sha256",
             "file_sha256",
+            "template_id",
             unique=True,
             postgresql_where=text("duplicate_of_id IS NULL"),
+            postgresql_nulls_not_distinct=True,
         ),
     )
 
@@ -207,8 +237,7 @@ class ImportBatch(Base):
     file_name: Mapped[str] = mapped_column(Text)
     file_sha256: Mapped[str] = mapped_column(String(64))
     source_type: Mapped[str] = mapped_column(String(30))
-    # P9 adds the template table and can add the foreign key then.
-    template_id: Mapped[int | None]
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("import_template.id"))
     status: Mapped[str] = mapped_column(String(24))
     total_rows: Mapped[int]
     error_rows: Mapped[int]

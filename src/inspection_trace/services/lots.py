@@ -1,15 +1,20 @@
 """Batch details, lineage and process waiting-time queries."""
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
 
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select, true
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import Select, and_, func, literal, or_, select
+from sqlalchemy.orm import Session
+from sqlalchemy.sql.selectable import CTE
 
-from inspection_trace.models import Lot, LotMove, QTimeRule, Station
+from inspection_trace.models import Lot, LotLink, LotMove, QTimeRule, Station
 from inspection_trace.services.errors import QueryError, require_aware_times
 from inspection_trace.trace.lineage import TraceDirection, TraceLink, trace_lot
 from inspection_trace.trace.qtime import QTimeStatus, calculate_qtime
+
+SPLIT_DEPTH_LIMIT = 10
 
 
 class MovementView(BaseModel):
@@ -56,6 +61,12 @@ class QTimePeriodView(BaseModel):
     items: list[QTimeView]
 
 
+class _RecordedWait(NamedTuple):
+    recorded_at: datetime
+    rule_id: int
+    result: QTimeView
+
+
 def _require_lot(session: Session, lot_no: str) -> Lot:
     lot = session.get(Lot, lot_no)
     if lot is None:
@@ -83,46 +94,67 @@ def _check_wait(
     )
 
 
-def _waits_for_lot(session: Session, lot: Lot, movements: dict[str, LotMove]) -> list[QTimeView]:
-    if lot.lot_type != "production":
-        return []
-    rules = list(session.scalars(select(QTimeRule).order_by(QTimeRule.id)))
+def _split_paths(lot_numbers: Select[tuple[str]], direction: TraceDirection) -> CTE:
+    """Expand each starting lot through split edges, retaining its distance from the start."""
+    seeds = lot_numbers.subquery()
+    paths = select(
+        seeds.c.lot_no, seeds.c.lot_no.label("related_lot_no"), literal(0).label("depth")
+    ).cte(f"qtime_{direction}", recursive=True)
+    if direction == "up":
+        current, related = LotLink.child_lot_no, LotLink.parent_lot_no
+    else:
+        current, related = LotLink.parent_lot_no, LotLink.child_lot_no
+
+    # UNION collapses equal-length paths to the same lot. The depth cap bounds cycles.
+    return paths.union(
+        select(paths.c.lot_no, related, paths.c.depth + 1)
+        .select_from(paths)
+        .join(LotLink, and_(current == paths.c.related_lot_no, LotLink.relation == "split"))
+        .where(paths.c.depth < SPLIT_DEPTH_LIMIT)
+    )
+
+
+def _resolved_waits(
+    session: Session, lot_numbers: Select[tuple[str]], rules: list[QTimeRule]
+) -> Iterator[tuple[str, QTimeRule, LotMove | None, LotMove | None]]:
+    """Resolve each station from the lot itself or its unique nearest split ancestor."""
+    if not rules:
+        return
+    ancestors = _split_paths(lot_numbers, "up")
     stations = {
         station for rule in rules for station in (rule.from_station_code, rule.to_station_code)
     }
-    missing = stations - movements.keys()
-    if missing:
-        # After a split, the child can inherit earlier station evidence from the parent.
-        parent_depths: dict[str, int] = {}
-        for edge in trace_lot(session, lot.lot_no, "up"):
-            if edge.relation == "split":
-                parent_depths.setdefault(edge.parent_lot_no, edge.depth)
-        if parent_depths:
-            candidates = list(
-                session.scalars(
-                    select(LotMove).where(
-                        LotMove.lot_no.in_(parent_depths), LotMove.station_code.in_(missing)
-                    )
-                )
+    ranked = (
+        select(
+            ancestors.c.lot_no,
+            LotMove.id.label("move_id"),
+            func.dense_rank()
+            .over(
+                partition_by=(ancestors.c.lot_no, LotMove.station_code),
+                order_by=ancestors.c.depth,
             )
-            for station in missing:
-                station_moves = [move for move in candidates if move.station_code == station]
-                if not station_moves:
-                    continue
-                nearest = min(parent_depths[move.lot_no] for move in station_moves)
-                closest = [move for move in station_moves if parent_depths[move.lot_no] == nearest]
-                if len(closest) == 1:
-                    movements[station] = closest[0]
-    return [
-        _check_wait(
-            lot.lot_no,
-            rule,
-            movements.get(rule.from_station_code),
-            movements.get(rule.to_station_code),
+            .label("proximity"),
         )
-        for rule in rules
-        if rule.from_station_code in movements or rule.to_station_code in movements
-    ]
+        .join(LotMove, LotMove.lot_no == ancestors.c.related_lot_no)
+        .where(LotMove.station_code.in_(stations))
+        .subquery()
+    )
+    nearest = (
+        select(ranked.c.lot_no, LotMove)
+        .join(LotMove, LotMove.id == ranked.c.move_id)
+        .where(ranked.c.proximity == 1)
+    )
+    by_lot: dict[str, dict[str, LotMove | None]] = {}
+    for lot_no, move in session.execute(nearest):
+        movements = by_lot.setdefault(lot_no, {})
+        movements[move.station_code] = None if move.station_code in movements else move
+
+    for lot_no, movements in by_lot.items():
+        for rule in rules:
+            upstream = movements.get(rule.from_station_code)
+            downstream = movements.get(rule.to_station_code)
+            if upstream is not None or downstream is not None:
+                yield lot_no, rule, upstream, downstream
 
 
 def lot_detail(lot_no: str, session: Session) -> LotView:
@@ -146,7 +178,11 @@ def lot_detail(lot_no: str, session: Session) -> LotView:
         )
         for move, name in rows
     ]
-    qtime = _waits_for_lot(session, lot, {move.station_code: move for move, _ in rows})
+    qtime = []
+    if lot.lot_type == "production":
+        rules = list(session.scalars(select(QTimeRule).order_by(QTimeRule.id)))
+        lot_numbers = select(Lot.lot_no).where(Lot.lot_no == lot_no)
+        qtime = [_check_wait(*wait) for wait in _resolved_waits(session, lot_numbers, rules)]
     return LotView(
         lot_no=lot.lot_no,
         lot_type=lot.lot_type,
@@ -176,6 +212,18 @@ def lot_trace(
     )
 
 
+def _recorded_at(upstream: LotMove | None, downstream: LotMove | None) -> datetime:
+    if downstream is not None:
+        return downstream.start_at.astimezone(UTC)
+    assert upstream is not None
+    return (upstream.end_at or upstream.start_at).astimezone(UTC)
+
+
+def _wait_owner_order(wait: QTimeView) -> tuple[bool, bool, str]:
+    """Prefer the lot that recorded the arrival, or the departure while pending."""
+    return wait.lot_no != wait.to_lot_no, wait.lot_no != wait.from_lot_no, wait.lot_no
+
+
 def period_qtime(
     session: Session,
     start: datetime,
@@ -186,39 +234,50 @@ def period_qtime(
 ) -> QTimePeriodView:
     """Filter actual recorded waits by downstream arrival, or upstream time while pending."""
     require_aware_times(start, end)
-    duration = end.astimezone(UTC) - start.astimezone(UTC)
-    if not timedelta(0) < duration <= timedelta(days=31):
+    start, end = start.astimezone(UTC), end.astimezone(UTC)
+    if not timedelta(0) < end - start <= timedelta(days=31):
         raise QueryError(422, "查詢期間須大於 0 且不超過 31 天")
 
-    upstream, downstream = aliased(LotMove), aliased(LotMove)
-    recorded_at = func.coalesce(downstream.start_at, upstream.end_at, upstream.start_at)
-    query = (
-        select(Lot.lot_no, QTimeRule, upstream, downstream)
-        .select_from(Lot)
-        .join(QTimeRule, true())
-        .outerjoin(
-            upstream,
-            and_(
-                upstream.lot_no == Lot.lot_no, upstream.station_code == QTimeRule.from_station_code
-            ),
-        )
-        .outerjoin(
-            downstream,
-            and_(
-                downstream.lot_no == Lot.lot_no,
-                downstream.station_code == QTimeRule.to_station_code,
-            ),
-        )
-        .where(Lot.lot_type == "production", recorded_at >= start, recorded_at < end)
-        .order_by(recorded_at.desc(), Lot.lot_no, QTimeRule.id)
+    rules = list(session.scalars(select(QTimeRule).order_by(QTimeRule.id)))
+    arrival_in_period = and_(
+        LotMove.station_code.in_({rule.to_station_code for rule in rules}),
+        LotMove.start_at >= start,
+        LotMove.start_at < end,
     )
-    if over_only:
-        hours = func.extract("epoch", downstream.start_at - upstream.end_at) / 3600
-        query = query.where(hours > QTimeRule.limit_hours)
-    if limit is not None:
-        query = query.limit(limit)
-    items = [
-        _check_wait(lot_no, rule, left, right)
-        for lot_no, rule, left, right in session.execute(query)
-    ]
-    return QTimePeriodView(items=items)
+    event_in_period = arrival_in_period
+    if not over_only:
+        departure_at = func.coalesce(LotMove.end_at, LotMove.start_at)
+        event_in_period = or_(
+            arrival_in_period,
+            and_(
+                LotMove.station_code.in_({rule.from_station_code for rule in rules}),
+                departure_at >= start,
+                departure_at < end,
+            ),
+        )
+    sources = select(LotMove.lot_no).where(event_in_period).distinct()
+    descendants = _split_paths(sources, "down")
+    lot_numbers = (
+        select(Lot.lot_no)
+        .join(descendants, descendants.c.related_lot_no == Lot.lot_no)
+        .where(Lot.lot_type == "production")
+        .distinct()
+    )
+
+    # Final filtering uses resolved times. The other end of a wait may fall outside the period.
+    unique: dict[tuple[int, int | None, int | None], _RecordedWait] = {}
+    for lot_no, rule, upstream, downstream in _resolved_waits(session, lot_numbers, rules):
+        recorded_at = _recorded_at(upstream, downstream)
+        if not start <= recorded_at < end:
+            continue
+        wait = _check_wait(lot_no, rule, upstream, downstream)
+        if over_only and wait.status != "over_limit":
+            continue
+        key = (rule.id, upstream.id if upstream else None, downstream.id if downstream else None)
+        previous = unique.get(key)
+        if previous is None or _wait_owner_order(wait) < _wait_owner_order(previous.result):
+            unique[key] = _RecordedWait(recorded_at, rule.id, wait)
+
+    ordered = sorted(unique.values(), key=lambda item: (item.result.lot_no, item.rule_id))
+    ordered.sort(key=lambda item: item.recorded_at, reverse=True)
+    return QTimePeriodView(items=[item.result for item in ordered[:limit]])

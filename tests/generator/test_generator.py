@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import shutil
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -233,3 +234,22 @@ def test_same_seed_same_output(tmp_path, cfg):
             assert read_grid(pa, None) == read_grid(pb, None)
         else:
             assert pa.read_bytes() == pb.read_bytes()
+
+
+def test_generator_refuses_to_replace_existing_output(tmp_path, cfg, monkeypatch):
+    output = tmp_path / "existing"
+    scenarios = output / "scenarios"
+    scenarios.mkdir(parents=True)
+    preset = scenarios / "preset.json"
+    preset.write_text('{"name":"Keep this preset"}', encoding="utf-8")
+    summary = output / "summary.json"
+    summary.write_text('{"seed":42}', encoding="utf-8")
+
+    def unexpected_delete(path):
+        pytest.fail(f"Generator tried to delete {path}")
+
+    monkeypatch.setattr(shutil, "rmtree", unexpected_delete)
+    with pytest.raises(FileExistsError, match="not empty"):
+        run(cfg, "small", SEED, output)
+    assert preset.read_text(encoding="utf-8") == '{"name":"Keep this preset"}'
+    assert summary.read_text(encoding="utf-8") == '{"seed":42}'
