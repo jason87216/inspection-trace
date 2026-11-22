@@ -11,6 +11,7 @@ Inspection Trace 將分散的製程檢驗報表轉成可查詢的量測紀錄，
 | 錯誤報告與紀錄查詢 | 查看匯入歷史、下載 Excel 錯誤報告。依批號、站點、機台、檢驗項目與量測時間查詢，支援分頁及超規篩選 |
 | 批號追溯與 Q-time | 追查上游原料、下游生產批及分批關係。依進出站紀錄計算兩站間的等待時間 |
 | 統計製程管制 | 依檢驗項目與機台顯示個別值及移動全距，標記超出管制界線或連續同側的訊號 |
+| MCP 查詢 | AI 客戶端可透過本機連線查批號、等待時間、量測、管制訊號、分組統計與匯入錯誤 |
 | 匯入評估 | 使用模擬資料的答案清單驗證檔案判定、錯誤偵測與自動修正 |
 
 技術堆疊為 Python 3.12、FastAPI、SQLAlchemy、Alembic、PostgreSQL 17、openpyxl，以及原生 HTML、CSS 和 JavaScript。測試與品質檢查使用 pytest、Ruff 和 GitHub Actions。
@@ -94,6 +95,17 @@ uv run alembic check
 ```
 
 只跑無資料庫測試時，使用 `uv run pytest -m 'not integration'`。若要在主機直接開發 API，可先停止 app 容器，再執行 `uv run uvicorn inspection_trace.main:app --host 127.0.0.1 --port 8000`。
+
+## 連接本機 MCP
+
+先依快速開始啟動 PostgreSQL、套用遷移並載入模擬主資料。將下面的命令和參數填入 MCP 客戶端的本機伺服器設定。客戶端會啟動此程序，並透過標準輸入輸出（stdio）交換查詢。
+
+```text
+command: uv
+args: --directory <專案絕對路徑> run --locked python -m inspection_trace.mcp_server
+```
+
+可先呼叫 `trace_lot`，傳入 `lot_no=L261102A001`、`direction=up`，確認回傳原料批及追溯層數。使用 P6 的匯入樣本後，可再呼叫 `query_records` 或 `spc_status` 核對量測 ID 和訊號。工具、回傳限制與稽核規則見 [系統設計](docs/DESIGN.md#8-mcp-伺服器)。
 
 ## 文件與範圍
 

@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from inspection_trace.api import health, imports, lots, records, spc
+from inspection_trace.services.errors import QueryError
 
 app = FastAPI(title="Inspection Trace")
 app.include_router(health.router)
@@ -22,3 +23,8 @@ app.mount(
 @app.get("/", include_in_schema=False)
 def index() -> RedirectResponse:
     return RedirectResponse("/ui/")
+
+
+@app.exception_handler(QueryError)
+async def query_error(_request: Request, exc: QueryError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})

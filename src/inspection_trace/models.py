@@ -264,3 +264,17 @@ class InspectionRecord(Base):
     operator: Mapped[str] = mapped_column(String(20))
     import_batch_id: Mapped[int] = mapped_column(ForeignKey("import_batch.id"), index=True)
     source_row_no: Mapped[int]
+
+
+class AuditLog(Base):
+    """Record a local MCP call without copying its result or raw input."""
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    actor: Mapped[str] = mapped_column(String(50))
+    channel: Mapped[str] = mapped_column(String(10))
+    action: Mapped[str] = mapped_column(String(50))
+    target: Mapped[str] = mapped_column(String(100))
+    detail: Mapped[dict[str, str]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

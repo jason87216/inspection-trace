@@ -48,3 +48,9 @@ C40 的標準欄位順序為 `LOTNO → PNL → PT → EQP → ITEM → VAL → 
 - 每張圖使用同一項連續量測與同一機台。查詢開頭的量測建立固定基準，後續異常值不會拉動本次查詢的界線。監測時應選擇歷史條件相近、製程穩定的基準期間。
 - I 圖中心線為基準平均值，管制界線為平均值 ± 3 × 平均移動全距 / 1.128。MR 圖計算相鄰兩點的絕對差，基準中心為平均移動全距，上限為其 3.267 倍，下限為 0。第一筆量測沒有前一點，移動全距留空。 [NIST 個別值管制圖](https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc322.htm) · [NIST 管制圖常數](https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc321.htm)
 - I 圖超出上下管制界線時標記。連續 8 個監測點在中心線同側時，標記第 8 點，碰到中心線或換側後重新計數。MR 圖在全距超出上限時標記。製程管制界線由資料估算，產品規格上下限則由檢驗項目主資料定義。 [NIST 管制圖判讀](https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/contchar.htm)
+
+## P7 共用查詢與 MCP
+
+- REST 和 MCP 共用查詢服務。MCP 使用官方 Python SDK 2.x 和本機 stdio，讓客戶端啟動子程序並以標準輸入輸出傳遞請求。 [官方 Python SDK](https://py.sdk.modelcontextprotocol.io/)
+- MCP 查詢使用獨立的 PostgreSQL 唯讀交易，查詢敘述限時 5 秒。稽核另開交易，記錄進入服務的工具和資源呼叫及其結果。工具輸入在 MCP 協定層被拒絕時，尚未進入服務。
+- 批號、量測 ID、來源檔案和列號供使用者核對證據。管制查詢僅回傳摘要和有限筆訊號，分組統計回傳一個代表量測 ID。
