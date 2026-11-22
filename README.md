@@ -121,6 +121,8 @@ uv run alembic check
 
 只跑無資料庫測試時，使用 `uv run pytest -m 'not integration'`。若要在主機直接開發 API，可先停止 app 容器，再執行 `uv run uvicorn inspection_trace.main:app --host 127.0.0.1 --port 8000`。
 
+GitHub Actions 會額外建置 Docker 應用映像，用該映像初始化臨時資料庫並啟動服務，確認健康檢查通過、C40 樣本入庫 6 筆且零錯誤。
+
 ## 連接本機 MCP
 
 先依快速開始啟動 PostgreSQL、套用遷移並載入模擬主資料。將下面的命令和參數填入 MCP 客戶端的本機伺服器設定。客戶端會啟動此程序，並透過標準輸入輸出（stdio）交換查詢。
