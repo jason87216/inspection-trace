@@ -107,6 +107,28 @@ args: --directory <專案絕對路徑> run --locked python -m inspection_trace.m
 
 可先呼叫 `trace_lot`，傳入 `lot_no=L261102A001`、`direction=up`，確認回傳原料批及追溯層數。使用 P6 的匯入樣本後，可再呼叫 `query_records` 或 `spc_status` 核對量測 ID 和訊號。工具、回傳限制與稽核規則見 [系統設計](docs/DESIGN.md#8-mcp-伺服器)。
 
+## 異常調查評估
+
+先啟動資料庫、執行 `uv run alembic upgrade head` 並載入與答案檔同一批的模擬主資料和量測。下面第一個指令執行 Q-time 規則基線，第二個指令使用本機支援工具呼叫的模型。請將 API 位址與模型名稱換成你實際運行的設定。
+
+```powershell
+uv run python -m scripts.evaluate_investigation --output out/investigation-baseline.json
+uv run python -m scripts.evaluate_investigation --base-url http://127.0.0.1:8080/v1 --model MODEL_NAME --output out/investigation-model.json
+```
+
+評估時模型只收到案例批號、調查範本與它實際查到的資料，並且每案例最多呼叫工具 8 次。報告分開列出根因命中、具可核對證據的命中、無效引用、格式錯誤及平均工具呼叫數。
+
+本機對照使用中型樣本（seed 42），在獨立的 PostgreSQL 匯入 78 份模擬報表，從漂移、原料突變、槽液老化及 Q-time 超時各取一案。Qwen3-8B 使用 llama.cpp 的工具呼叫模式，兩組皆使用相同的批號及事件答案。
+
+| 方法 | 根因與對象命中 | 具證據命中 | 平均工具呼叫 | 無充分證據的結論 | 格式錯誤 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Q-time 規則基線 | 1/4 | 1/4 | 1.00 | 0 | 0 |
+| Qwen3-8B Q4_K_M | 0/4 | 0/4 | 2.75 | 3 | 1 |
+
+規則基線命中 Q-time 超時。Qwen3-8B 在原料突變案例辨認出事件類型，但把生產批號填成原料批號。四案各只代表一種情境，這組分數用來揭露輸出與引用問題。可用 `--events` 指向另一份事件答案檔，並在資料庫載入相對應的模擬報表。
+
+若使用遠端 HTTPS 模型，需明確帶上 `--allow-remote-model`，並將憑證放入 `INSPECTION_MODEL_API_KEY` 環境變數。評估僅使用模擬資料。 [工具呼叫格式](https://platform.openai.com/docs/guides/function-calling)
+
 ## 文件與範圍
 
 - [系統設計與資料模型](docs/DESIGN.md)

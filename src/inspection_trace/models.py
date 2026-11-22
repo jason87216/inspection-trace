@@ -278,3 +278,18 @@ class AuditLog(Base):
     target: Mapped[str] = mapped_column(String(100))
     detail: Mapped[dict[str, str]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LLMCallLog(Base):
+    """Evaluation request metadata and outcome, excluding prompts and credentials."""
+
+    __tablename__ = "llm_call_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    feature: Mapped[str] = mapped_column(String(40))
+    provider: Mapped[str] = mapped_column(String(40))
+    model: Mapped[str] = mapped_column(String(160))
+    input_digest: Mapped[str] = mapped_column(String(64))
+    output: Mapped[dict[str, object]] = mapped_column(JSON)
+    latency_ms: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
