@@ -1,6 +1,7 @@
 import csv
 import json
 import tomllib
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
@@ -10,7 +11,50 @@ from fastapi.testclient import TestClient
 
 from generator.config import CONFIG_DIR, build_config
 from generator.pipeline import run
+from inspection_trace.ingestion.normalization import TAIPEI, parse_roc_day, parse_timestamp
 from inspection_trace.main import app
+from inspection_trace.scenario_schema import builtin, preview
+
+
+def test_scenario_reports_encode_short_epoch_and_early_roc_year(tmp_path: Path) -> None:
+    preset = builtin()
+    preset.config.scenario.start = "1970-01-01T08:00:00"
+    preset.config.scale.small = 1
+    preset.config.stations = [preset.config.stations[index] for index in (4, 3)]
+    for station in preset.config.stations:
+        station.queue_hours = station.process_hours = (0, 0)
+    preset.config.items = [preset.config.items[index] for index in (0, 1)]
+    config = preset.config.model_dump()
+    for event in config["events"].values():
+        event["enabled"] = False
+    preset.dirty.files.clean_ratio = 1
+    preset.dirty.files.duplicate_ratio = 0
+    destination = tmp_path / "early"
+    run(build_config(config, preset.dirty.model_dump()), "small", 42, destination)
+
+    machine = next((destination / "files").glob("AOI*.csv"))
+    with machine.open(encoding="utf-8", newline="") as stream:
+        timestamp = next(csv.DictReader(stream))["timestamp"]
+    assert len(timestamp) == 9 and timestamp.startswith("000")
+    assert parse_timestamp("000000000", machine=True) == datetime(1970, 1, 1, 8, tzinfo=TAIPEI)
+    with (destination / "truth" / "records.csv").open(encoding="utf-8", newline="") as stream:
+        expected = min(
+            datetime.fromisoformat(row["measured_at"]).replace(tzinfo=TAIPEI)
+            for row in csv.DictReader(stream)
+            if row["station"] == "C50"
+        )
+    assert parse_timestamp(timestamp, machine=True) == expected
+    legacy = next((destination / "files").glob("MES_OLD*.csv"))
+    with legacy.open(encoding="cp950", newline="") as stream:
+        assert parse_roc_day(next(csv.DictReader(stream))["DT"]) == datetime(1970, 1, 1).date()
+
+
+def test_scenario_preview_checks_the_taipei_unix_epoch_boundary() -> None:
+    preset = builtin()
+    preset.config.scenario.start = "1970-01-01T07:59:59"
+    assert preview(preset, "small").errors
+    preset.config.scenario.start = "1970-01-01T08:00:00"
+    assert preview(preset, "small").errors == []
 
 
 def test_generator_can_run_without_abf_codes(tmp_path: Path) -> None:

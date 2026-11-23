@@ -219,10 +219,15 @@ def preview(preset: Preset, scale: str) -> Preview:
     }
     try:
         start = datetime.fromisoformat(sc.start)
-        if start.tzinfo or not 1970 <= start.year <= 2098 or "T" not in sc.start:
+        if (
+            start.tzinfo
+            or start < datetime(1970, 1, 1, 8)
+            or start.year > 2098
+            or "T" not in sc.start
+        ):
             raise ValueError()
     except ValueError:
-        errors.append("起始時間須為 1970–2098 的台北本地時間，含日期及時間。")
+        errors.append("起始時間須介於台北時間 1970-01-01 08:00 與 2098 年底，含日期及時間。")
     if sc.sample_panels > sc.panels_per_lot:
         errors.append("抽樣片數不可超過每批總片數。")
 

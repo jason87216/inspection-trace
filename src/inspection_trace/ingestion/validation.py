@@ -36,7 +36,7 @@ from inspection_trace.ingestion.normalization import (
     unit_multiplier,
 )
 from inspection_trace.ingestion.readers import RawCell
-from inspection_trace.models import InspectionItem, Lot, Machine
+from inspection_trace.models import InspectionItem, Lot, LotMove, Machine
 
 type MeasurementKey = tuple[str, str, str, int, int | None]
 _LOT = re.compile(r"L[0-9]{6}[A-Z][0-9]{3}(?:-S[0-9])?")
@@ -80,7 +80,7 @@ class MasterData:
     machines: dict[str, Machine]
     items: dict[str, InspectionItem]
     items_by_name: dict[tuple[str, str], InspectionItem]
-    move_operators: dict[tuple[str, str], str]
+    moves: dict[tuple[str, str], LotMove]
     operators: set[str]
 
 
@@ -201,7 +201,8 @@ def validate_row(
             f"範本預設單位 {unit!r} 與檢驗項目單位 {item.unit!r} 不相容",
         )
 
-    station_operator = master.move_operators.get((lot_no, station))
+    move = master.moves.get((lot_no, station))
+    station_operator = move.operator if move is not None else None
     operator = texts.get("operator") or station_operator
     if (
         operator is None

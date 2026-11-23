@@ -18,7 +18,7 @@ from inspection_trace.ingestion.errors import (
     E_REQUIRED_MISSING,
 )
 from inspection_trace.ingestion.loader import import_file
-from inspection_trace.models import ImportBatch, ImportErrorDetail, InspectionRecord
+from inspection_trace.models import ImportBatch, ImportErrorDetail, InspectionRecord, Lot, LotLink
 
 pytestmark = pytest.mark.integration
 SAMPLES = Path(__file__).resolve().parents[2] / "samples"
@@ -112,6 +112,82 @@ def test_changed_measurement_rejects_the_entire_file(seeded_session: Session) ->
         assert (error.row_no, error.column, error.code) == (2, "VAL", E_MEASUREMENT_CONFLICT)
         assert seeded_session.get(InspectionRecord, original_record_id).value == original_value
         assert seeded_session.scalar(select(func.count()).select_from(InspectionRecord)) == 6
+
+
+def test_same_values_reuse_records_and_warn_when_provenance_changes(client: TestClient) -> None:
+    path = SAMPLES / "files" / "MES_OLD_C40_1151103.csv"
+    headers = {"Content-Type": "application/octet-stream"}
+    original = client.post(
+        "/imports", params={"file_name": path.name}, headers=headers, content=path.read_bytes()
+    ).json()
+    original_records = client.get("/records", params={"station_code": "C40"}).json()["items"]
+    rows = list(csv.reader(path.read_text(encoding="cp950").splitlines()))
+    rows[1][3], rows[1][8], rows[1][9] = "LIN-02", "000114", "OP-0006"
+    rows[2][8] = "000215"
+    rendered = StringIO(newline="")
+    csv.writer(rendered).writerows(rows)
+    response = client.post(
+        "/imports",
+        params={"file_name": "same_values.csv"},
+        headers=headers,
+        content=rendered.getvalue().encode("cp950"),
+    )
+
+    assert response.status_code == 201, response.text
+    batch = response.json()
+    assert (batch["status"], batch["inserted_count"], batch["errors"]) == ("ACCEPT", 0, [])
+    warnings = batch["warnings"]
+    assert any("重用 6 筆既有量測" in warning for warning in warnings)
+    assert any("2 筆" in warning and "原紀錄" in warning for warning in warnings)
+    assert any("第 2 列" in warning and "機台、量測時間、操作員" in warning for warning in warnings)
+    assert any("第 3 列" in warning and "量測時間" in warning for warning in warnings)
+    assert client.get(f"/imports/{batch['id']}").json()["warnings"] == warnings
+    current_records = client.get("/records", params={"station_code": "C40"}).json()["items"]
+    assert current_records == original_records
+    assert all(record["import_batch_id"] == original["id"] for record in original_records)
+
+
+def test_known_same_station_machine_warns_on_first_import(seeded_session: Session) -> None:
+    path = SAMPLES / "files" / "MES_OLD_C40_1151103.csv"
+    data = path.read_bytes().replace(b"LIN-01", b"LIN-02")
+    batch_id = import_file(seeded_session, "machine_swap.csv", data)
+
+    with seeded_session.begin():
+        batch = seeded_session.get(ImportBatch, batch_id)
+        assert batch.status == "ACCEPT"
+        assert len(batch.warnings) == 6
+        assert "6 列" in batch.warnings[0]
+        assert "製程參考" in batch.warnings[0]
+        assert "第 2 列" in batch.warnings[1]
+        assert "LIN-01" in batch.warnings[1] and "LIN-02" in batch.warnings[1]
+        assert all("第 7 列" not in warning for warning in batch.warnings)
+        assert list(seeded_session.scalars(select(InspectionRecord.machine_code))) == ["LIN-02"] * 6
+
+
+def test_machine_warning_requires_a_direct_move(seeded_session: Session) -> None:
+    parent = "L261102B008"
+    child = f"{parent}-S1"
+    with seeded_session.begin():
+        original = seeded_session.get(Lot, parent)
+        seeded_session.add(
+            Lot(
+                lot_no=child,
+                lot_type="production",
+                part_no=original.part_no,
+                panel_count=original.panel_count,
+                released_at=original.released_at,
+            )
+        )
+        seeded_session.flush()
+        seeded_session.add(LotLink(parent_lot_no=parent, child_lot_no=child, relation="split"))
+
+    path = SAMPLES / "files" / "MES_OLD_C40_1151103.csv"
+    data = path.read_bytes().replace(parent.encode(), child.encode()).replace(b"LIN-01", b"LIN-02")
+    batch_id = import_file(seeded_session, "split_without_move.csv", data)
+    with seeded_session.begin():
+        batch = seeded_session.get(ImportBatch, batch_id)
+        assert batch.status == "ACCEPT"
+        assert batch.warnings == []
 
 
 def test_p3_api_upload_history_report_and_record_filters(client: TestClient) -> None:

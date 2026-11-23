@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Iterable
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, TypeVar
+from zoneinfo import ZoneInfo
 
 from generator.simulate import Record
 
-TW = timezone(timedelta(hours=8))
+TW = ZoneInfo("Asia/Taipei")
 K = TypeVar("K")
 
 
@@ -30,7 +31,7 @@ def epoch(ts: datetime) -> int:
 
 
 def roc_date(ts: datetime | date) -> str:
-    return f"{ts.year - 1911}{ts.month:02d}{ts.day:02d}"
+    return f"{ts.year - 1911:03d}{ts:%m%d}"
 
 
 def fmt_number(value: Any, decimals: int) -> str:

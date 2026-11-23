@@ -57,7 +57,7 @@ def render_machine(cfg: Config, station: str, recs: list[Record]) -> list[DocFil
                     "machine": r.machine,
                     "item": r.item,
                     "value": str(r.value),
-                    "time": str(epoch(r.measured_at)),
+                    "time": f"{epoch(r.measured_at):09d}",
                 },
                 {"value": r.record_id},
             )

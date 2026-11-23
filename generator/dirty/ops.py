@@ -13,10 +13,11 @@ from __future__ import annotations
 import copy
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from generator.config import Config
+from generator.render.common import TW
 from generator.table import DocFile, Row
 
 MIL_PER_UM = 1 / 25.4
@@ -205,8 +206,7 @@ class Dirtier:
             return []
         original = row.cells[key]
         if doc.roles.time_style == "epoch":
-            # rebuild local time from the epoch the renderer wrote (UTC+8)
-            ts = datetime(1970, 1, 1) + timedelta(seconds=int(original) + 8 * 3600)
+            ts = datetime.fromtimestamp(int(original), TW).replace(tzinfo=None)
             choices = [
                 ts.strftime("%Y-%m-%d %H:%M:%S"),
                 ts.strftime("%Y/%m/%d %H:%M"),
@@ -220,7 +220,7 @@ class Dirtier:
                 ts.strftime("%Y/%m/%d %H:%M"),
                 ts.strftime("%Y%m%d %H%M"),
                 round(serial, 6),
-                f"{ts.year - 1911}/{ts:%m/%d %H:%M}",
+                f"{ts.year - 1911:03d}/{ts:%m/%d %H:%M}",
             ]
             dirty = self.rng.choice(choices)
         row.cells[key] = dirty
