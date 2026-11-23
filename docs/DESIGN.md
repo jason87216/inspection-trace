@@ -29,8 +29,7 @@
 6. 管制圖可標出產生器埋入的漂移與突變。
 7. 本機 MCP 客戶端可呼叫唯讀查詢，並取得量測與來源證據。
 
-8. 以產生器的事件答案量測本機模型調查的根因命中率及證據品質。
-9. 新報表格式經人工核准後可套用；固定版面 PDF 可經既有驗證入庫。
+8. 新報表格式經人工核准後可套用；固定版面 PDF 可經既有驗證入庫。
 
 ## 3. 技術選擇
 
@@ -121,7 +120,7 @@ P7 將批號與等待時間、檢驗紀錄、管制圖、匯入歷史與錯誤�
 | `inspection_record` | P2 | `id`（bigint） | lot_no, station_code, machine_code, item_code, panel, point（NULL＝計數型沒有量測點）, value, measured_at, operator, import_batch_id, source_row_no | 每個量測值一列；業務鍵唯一 `UNIQUE NULLS NOT DISTINCT (lot_no, station_code, item_code, panel, point)`，資料層冪等；不存 unit |
 | `qtime_rule` | P5 | `id` | from_station_code, to_station_code, limit_hours | Q-time 規則 |
 | `audit_log` | P7 | `id` | actor, channel, action, target, detail（JSON）, created_at | 操作紀錄；channel：web／api／mcp |
-| `llm_call_log` | P8 | `id` | feature, provider, model, input_digest, output（JSON）, latency_ms, created_at | 每次 LLM 呼叫的紀錄 |
+| `llm_call_log` | P9 | `id` | feature, provider, model, input_digest, output（JSON）, latency_ms, created_at | 匯入範本欄位建議的模型呼叫紀錄 |
 | `import_template` | P9 | `id` | name, revision, file_type, header_row, column_map（JSON）, default_unit, date_format, status, approved_by, approved_at | 檔案格式範本；status：draft／approved |
 
 - `inspection_record` 保留 `import_batch_id` 與 `source_row_no`，任何一筆資料都能回查是哪份檔案的第幾列；
@@ -235,7 +234,7 @@ P7 將批號與等待時間、檢驗紀錄、管制圖、匯入歷史與錯誤�
 
 ### 8.4 傳輸
 
-- 本機展示使用 stdio，啟動方式見 [README](../README.md#連接本機-mcp)。 [官方 Python SDK](https://py.sdk.modelcontextprotocol.io/)
+- 本機展示使用 stdio，啟動方式見 [試跑指南](TRY.md#連接本機-mcp)。 [官方 Python SDK](https://py.sdk.modelcontextprotocol.io/)
 - 遠端部署列為後續規劃，預計採 Streamable HTTP 與身分驗證。
 
 ## 9. 選用 LLM 功能規劃
@@ -252,18 +251,15 @@ P7 將批號與等待時間、檢驗紀錄、管制圖、匯入歷史與錯誤�
 
 | 功能 | 做法 | 驗證方式 |
 |---|---|---|
-| **異常調查**（主角） | LLM 用戶端透過 MCP 呼叫工具，依 `investigate_anomaly` 範本產出附證據的調查報告。系統本身不需要內建 Agent | 以 `events.answers.json` 計算**根因命中率**；可比較不同模型（雲端／本機） |
+| **異常調查** | AI 客戶端透過 MCP 呼叫唯讀工具，可使用 `investigate_anomaly` 範本整理附證據 ID 的調查。系統本身不內建 Agent | 不提供自動評估，結論由人依證據 ID 核對。評估程式已移除，見 9.3 |
 | **新格式範本產生** | 人選定 CSV／XLSX 表頭列，本機模型可建議欄位。人工確認欄位、日期及單位，儲存草稿並核准後即可套用 | 測試自訂表頭、不同欄序、草稿拒用、版本衝突、核准及重傳 |
 | **PDF 擷取** | 固定版面化驗報告以文字擷取器處理 | 擷取結果走原本的匯入管線，與人工資料接受相同驗證 |
 
 **設計重點：「讓 LLM 產生規則，再由規則處理資料。」**範本產生只在第一次遇到新格式時呼叫 LLM。
 
-### 9.3 調查評估
+### 9.3 調查評估（已移除）
 
-- 依事件答案選出 Q-time 超時、漂移、原料突變和槽液老化案例，以批號作為調查起點。
-- 根因命中要求事件代碼及關聯對象都相符。具證據命中另外要求引用可解析，且至少一筆查詢結果含符合該類結論的證據。這項評分檢查結構化結論與引用，自由文字因果推理仍需人工覆核。
-- 模型每案例最多呼叫 8 次工具。`llm_call_log` 記錄模型名稱、請求摘要雜湊、結果狀態和耗時。評估報告含逐案例證據與分數。
-- 設定方式和基線結果見 [README](../README.md#異常調查評估)。
+曾實作以事件答案計算根因命中率與證據命中的評估程式，並與規則基線比較。本機 8B 模型初步測試時無法穩定完成多步驟的工具呼叫，小樣本的評分也不足以支持功能宣稱，因此移除評估程式與相關測試，保留 MCP 工具與調查範本。`llm_call_log` 仍用於匯入範本的欄位建議。
 
 ## 10. 專案結構
 
@@ -277,6 +273,8 @@ inspection-trace/
 ├─ .github/workflows/ci.yml
 ├─ docs/
 │  ├─ DESIGN.md               # 本文件
+│  ├─ TRY.md                  # 試跑指南
+│  ├─ ERROR_REPORT_GUIDE.md   # 給現場人員的退件處理說明
 │  ├─ GENERATOR_DESIGN.md
 │  ├─ PLAN.md                 # 交付範圍與後續規劃
 │  └─ DECISIONS.md            # 架構決策紀錄
@@ -302,7 +300,7 @@ inspection-trace/
 
 ## 11. 交付與驗證
 
-各階段的交付內容及驗收入口見 [PLAN.md](PLAN.md)。[README](../README.md) 提供初始化、樣本匯入、批號追溯和匯入偵測率重跑方式。
+各階段的交付內容及驗收入口見 [PLAN.md](PLAN.md)。[README](../README.md) 提供初始化與匯入偵測率重跑方式，[試跑指南](TRY.md) 提供樣本匯入、批號追溯等操作步驟。
 
 ## 12. 模擬情境管理（P11）
 
