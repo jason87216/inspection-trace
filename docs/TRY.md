@@ -87,3 +87,9 @@ uv run python -m scripts.export_demo --out out/inspection-trace-demo.json
 ```
 
 只需要資料庫已啟動並完成遷移，不需要先載入主資料。全部樣本的判定都符合答案時，結束代碼為 0。
+
+模擬情境的展示資料另外匯出。腳本用與網頁「模擬情境」頁相同的預覽驗證，計算內建 ABF 預設在小、中、大型規模下的結果，以及幾種修改範例（抽樣片數超過每批片數、目標值超出規格上限、資料量超過上限、關閉原料突變）。不需要資料庫：
+
+```powershell
+uv run python -m scripts.export_scenario_demo --out out/inspection-trace-scenarios.json
+```
